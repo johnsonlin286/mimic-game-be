@@ -8,7 +8,56 @@ const rooms_1 = __importDefault(require("../rooms"));
 function registerRoomHandlers(io, socket) {
     const roomCreate = (payload) => {
         console.log("Room create", payload);
-        // TODO: validate payload
+        const { creatorEmail, roomName, roomMaxPlayers, roomPin } = payload;
+        if (!creatorEmail) {
+            socket.emit("room-create-failed", {
+                success: false,
+                message: "Creator email is required!",
+            });
+            return;
+        }
+        if (!roomName) {
+            socket.emit("room-create-failed", {
+                success: false,
+                message: "Room name is required!",
+            });
+            return;
+        }
+        else if (roomName.length < 3 || roomName.length > 20) {
+            socket.emit("room-create-failed", {
+                success: false,
+                message: "Room name must be between 3 and 20 characters!",
+            });
+            return;
+        }
+        if (!roomMaxPlayers) {
+            socket.emit("room-create-failed", {
+                success: false,
+                message: "Room max players is required!",
+            });
+            return;
+        }
+        else if (roomMaxPlayers < 3 || roomMaxPlayers > 10) {
+            socket.emit("room-create-failed", {
+                success: false,
+                message: "Room max players must be between 3 and 10!",
+            });
+            return;
+        }
+        if (!roomPin) {
+            socket.emit("room-create-failed", {
+                success: false,
+                message: "Room pin is required!",
+            });
+            return;
+        }
+        else if (roomPin.length !== 4) {
+            socket.emit("room-create-failed", {
+                success: false,
+                message: "Room pin must be 4 characters!",
+            });
+            return;
+        }
         const newName = `${payload.roomName}-${Date.now().toString()}`;
         const roomData = {
             creatorEmail: payload.creatorEmail,
@@ -16,7 +65,9 @@ function registerRoomHandlers(io, socket) {
             roomId: newName,
             roomMaxPlayers: payload.roomMaxPlayers,
             roomPin: payload.roomPin,
-            roomPlayers: [],
+            roomPlayers: [
+                { socketId: socket.id, playerEmail: payload.creatorEmail, role: "host" },
+            ],
             createdAt: new Date(),
             updatedAt: new Date(),
         };
@@ -26,8 +77,18 @@ function registerRoomHandlers(io, socket) {
             success: true,
             message: "Room created successfully",
             data: {
-                roomDisplayName: roomData.roomDisplayName,
-                roomId: roomData.roomId,
+                room: {
+                    roomId: roomData.roomId,
+                    roomDisplayName: roomData.roomDisplayName,
+                    roomMaxPlayers: roomData.roomMaxPlayers,
+                    roomPlayers: roomData.roomPlayers,
+                    createdAt: roomData.createdAt,
+                    updatedAt: roomData.updatedAt,
+                },
+                player: {
+                    playerEmail: payload.creatorEmail,
+                    role: "host",
+                },
             },
         });
     };
@@ -36,71 +97,193 @@ function registerRoomHandlers(io, socket) {
         // TODO: validate payload
         const room = rooms_1.default.get(payload.roomId);
         if (!room) {
-            socket.emit("room-join-not-found", {
+            socket.emit("room-join-failed", {
                 success: false,
-                message: "Room not found",
+                message: "Room not found!",
             });
             return;
         }
-        room.roomPlayers.push({ playerEmail: payload.playerEmail });
+        if (room.roomPlayers.length >= room.roomMaxPlayers) {
+            socket.emit("room-join-failed", {
+                success: false,
+                message: "Room is full!",
+            });
+            return;
+        }
+        if (payload.roomPin !== room.roomPin) {
+            socket.emit("room-join-failed", {
+                success: false,
+                message: "Invalid room pin!",
+            });
+            return;
+        }
+        room.roomPlayers.push({ socketId: socket.id, playerEmail: payload.playerEmail, role: "player" });
         socket.join(payload.roomId);
         socket.emit("room-join-success", {
             success: true,
             message: "Room joined successfully",
             data: {
-                roomDisplayName: room.roomDisplayName,
-                roomId: room.roomId,
+                room: {
+                    roomId: room.roomId,
+                    roomDisplayName: room.roomDisplayName,
+                    roomMaxPlayers: room.roomMaxPlayers,
+                    roomPlayers: room.roomPlayers,
+                    createdAt: room.createdAt,
+                    updatedAt: room.updatedAt,
+                },
+                player: {
+                    playerEmail: payload.playerEmail,
+                    role: "player",
+                },
             },
         });
     };
-    // socket.on("room-create", (payload: CreateRoomPayload) => {
-    //   console.log("Room create", payload);
-    //   // TODO: validate payload
-    //   const newName = `${payload.roomName}-${Date.now().toString()}`;
-    //   const roomData: RoomData = {
-    //     creatorEmail: payload.creatorEmail,
-    //     roomDisplayName: payload.roomName,
-    //     roomId: newName,
-    //     roomMaxPlayers: payload.roomMaxPlayers,
-    //     roomPin: payload.roomPin,
-    //     roomPlayers: [],
-    //     createdAt: new Date(),
-    //     updatedAt: new Date(),
-    //   };
-    //   rooms.set(newName, roomData);
-    //   socket.join(newName);
-    //   socket.emit("room-created", {
-    //     success: true,
-    //     message: "Room created successfully",
-    //     data: {
-    //       roomDisplayName: roomData.roomDisplayName,
-    //       roomId: roomData.roomId,
-    //     },
-    //   });
-    // });
-    // socket.on("room-join", (payload: RoomJoinPayload) => {
-    //   console.log("Room join", payload);
-    //   // TODO: validate payload
-    //   const room = rooms.get(payload.roomId);
-    //   if (!room) {
-    //     socket.emit("room-join-not-found", {
-    //       success: false,
-    //       message: "Room not found",
-    //     });
-    //     return;
-    //   }
-    //   room.roomPlayers.push({ playerEmail: payload.playerEmail });
-    //   socket.join(payload.roomId);
-    //   socket.emit("room-join-success", {
-    //     success: true,
-    //     message: "Room joined successfully",
-    //     data: {
-    //       roomDisplayName: room.roomDisplayName,
-    //       roomId: room.roomId,
-    //     },
-    //   });
-    // });
+    const roomRejoin = (payload) => {
+        console.log("Room rejoin", payload);
+        const room = rooms_1.default.get(payload.roomId);
+        if (!room) {
+            socket.emit("room-rejoin-not-found", {
+                success: false,
+                message: "Room not found",
+            });
+            return;
+        }
+        const player = room.roomPlayers.find(player => player.playerEmail === payload.playerEmail);
+        if (!player) {
+            socket.emit("room-rejoin-not-found", {
+                success: false,
+                message: "Player not found",
+            });
+            return;
+        }
+        // update player socket id
+        player.socketId = payload.socketId;
+        socket.join(payload.roomId);
+        io.to(payload.roomId).emit("room-rejoin-success", {
+            success: true,
+            message: "Room rejoined successfully",
+            data: {
+                room: {
+                    roomId: room.roomId,
+                    roomDisplayName: room.roomDisplayName,
+                    roomMaxPlayers: room.roomMaxPlayers,
+                    roomPlayers: room.roomPlayers,
+                    createdAt: room.createdAt,
+                    updatedAt: room.updatedAt,
+                },
+            },
+        });
+    };
+    const roomLeave = (payload) => {
+        console.log("Room leave", payload);
+        const room = rooms_1.default.get(payload.roomId);
+        if (!room) {
+            socket.emit("room-leave-not-found", {
+                success: false,
+                message: "Room not found",
+            });
+            return;
+        }
+        const player = room.roomPlayers.find(player => player.playerEmail === payload.playerEmail);
+        if (!player) {
+            socket.emit("room-leave-not-found", {
+                success: false,
+                message: "Player not found",
+            });
+            return;
+        }
+        if (player.role === "host") {
+            console.log("Host left the room, kicking all players", payload.roomId);
+            // kick all players
+            room.roomPlayers.forEach(player => {
+                const kickPayload = {
+                    roomId: payload.roomId,
+                    socketId: player.socketId,
+                    playerEmail: player.playerEmail,
+                };
+                roomKick(kickPayload);
+            });
+        }
+        else {
+            console.log("Room leave player");
+            room.roomPlayers = room.roomPlayers.filter(player => player.playerEmail !== payload.playerEmail);
+            socket.leave(payload.roomId);
+            io.to(payload.roomId).emit("listen-room-leave-success", {
+                success: true,
+                message: `${player.playerEmail} left the room`,
+                data: {
+                    player: {
+                        playerEmail: payload.playerEmail,
+                        role: player.role,
+                    },
+                    room: {
+                        roomId: room.roomId,
+                        roomDisplayName: room.roomDisplayName,
+                        roomMaxPlayers: room.roomMaxPlayers,
+                        roomPlayers: room.roomPlayers,
+                        createdAt: room.createdAt,
+                        updatedAt: room.updatedAt,
+                    },
+                },
+            });
+        }
+        socket.emit("room-leave-success", {
+            success: true,
+            message: `${player.playerEmail} left the room`,
+        });
+        // check room players count, if it's 0, dismiss the room
+        if (room.roomPlayers.length === 0) {
+            rooms_1.default.delete(payload.roomId);
+        }
+    };
+    const roomKick = (payload) => {
+        console.log("Room kick", payload);
+        const room = rooms_1.default.get(payload.roomId);
+        if (!room) {
+            socket.emit("room-kick-not-found", {
+                success: false,
+                message: "Room not found",
+            });
+            return;
+        }
+        const player = room.roomPlayers.find(player => player.playerEmail === payload.playerEmail);
+        if (!player) {
+            socket.emit("room-kick-not-found", {
+                success: false,
+                message: "Player not found",
+            });
+            return;
+        }
+        room.roomPlayers = room.roomPlayers.filter(player => player.playerEmail !== payload.playerEmail);
+        io.in(payload.socketId).socketsLeave(payload.roomId);
+        io.to(payload.socketId).emit("listen-room-kicked-player", {
+            success: true,
+            message: "You have been kicked from the room",
+            data: {
+                playerEmail: payload.playerEmail,
+            }
+        });
+        io.to(payload.roomId).emit("listen-room-kick-player", {
+            success: true,
+            message: `${payload.playerEmail} has been kicked from the room`,
+            data: {
+                room: {
+                    roomId: room.roomId,
+                    roomDisplayName: room.roomDisplayName,
+                    roomMaxPlayers: room.roomMaxPlayers,
+                    roomPlayers: room.roomPlayers,
+                },
+            }
+        });
+        // check room players count, if it's 0, dismiss the room
+        if (room.roomPlayers.length === 0) {
+            rooms_1.default.delete(payload.roomId);
+        }
+    };
     socket.on("room:create", roomCreate);
     socket.on("room:join", roomJoin);
+    socket.on("room:rejoin", roomRejoin);
+    socket.on("room:leave", roomLeave);
+    socket.on("room:kick", roomKick);
 }
 //# sourceMappingURL=rooms.js.map

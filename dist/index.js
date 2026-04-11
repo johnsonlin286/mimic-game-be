@@ -8,9 +8,9 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const cors_1 = __importDefault(require("cors"));
 const socket_io_1 = require("socket.io");
 const http_1 = require("http");
-// import rooms from "./rooms";
 const rooms_1 = __importDefault(require("./routes/rooms"));
 const rooms_2 = __importDefault(require("./sockets/rooms"));
+const roomGarbageCollector_1 = require("./roomGarbageCollector");
 dotenv_1.default.config({
     quiet: true,
 });
@@ -33,7 +33,11 @@ app.get("/", (req, res) => {
 });
 app.use("/api/rooms", rooms_1.default);
 const onConnection = (socket) => {
+    console.log("A user connected");
     (0, rooms_2.default)(io, socket);
+    socket.on("disconnect", () => {
+        console.log("A user disconnected");
+    });
 };
 io.on("connection", onConnection);
 /*
@@ -103,5 +107,6 @@ io.on("connection", (socket) => {
 */
 server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+    (0, roomGarbageCollector_1.startRoomGarbageCollector)(io);
 });
 //# sourceMappingURL=index.js.map

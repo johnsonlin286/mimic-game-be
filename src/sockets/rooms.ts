@@ -113,6 +113,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       return;
     }
     room.roomPlayers.push({ socketId: socket.id, playerEmail: payload.playerEmail, role: "player" });
+    room.updatedAt = new Date();
     socket.join(payload.roomId);
     socket.emit("room-join-success", {
       success: true,
@@ -153,6 +154,8 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       });
       return;
     }
+    // update room updated at
+    room.updatedAt = new Date();
     // update player socket id
     player.socketId = payload.socketId;
     socket.join(payload.roomId);
@@ -203,6 +206,9 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       })
     } else {
       console.log("Room leave player");
+      // update room updated at
+      room.updatedAt = new Date();
+      // remove player from room players
       room.roomPlayers = room.roomPlayers.filter(player => player.playerEmail !== payload.playerEmail);
       socket.leave(payload.roomId);
       io.to(payload.roomId).emit("listen-room-leave-success", {
@@ -252,6 +258,9 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       });
       return;
     }
+    // update room updated at
+    room.updatedAt = new Date();
+    // remove player from room players
     room.roomPlayers = room.roomPlayers.filter(player => player.playerEmail !== payload.playerEmail);
     io.in(payload.socketId).socketsLeave(payload.roomId);
     io.to(payload.socketId).emit("listen-room-kicked-player", {
@@ -270,6 +279,8 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
           roomDisplayName: room.roomDisplayName,
           roomMaxPlayers: room.roomMaxPlayers,
           roomPlayers: room.roomPlayers,
+          createdAt: room.createdAt,
+          updatedAt: room.updatedAt,
         },
       }
     });
