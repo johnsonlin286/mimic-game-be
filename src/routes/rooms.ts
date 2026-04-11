@@ -10,6 +10,11 @@ router.get("/all", (req, res) => {
     roomId: room.roomId,
     roomMaxPlayers: room.roomMaxPlayers,
     roomPlayers: room.roomPlayers,
+    gameRule: {
+      gameStatus: room.gameRule.status,
+      category: room.gameRule.category,
+      language: room.gameRule.language,
+    },
     createdAt: room.createdAt,
     updatedAt: room.updatedAt,
   }));
