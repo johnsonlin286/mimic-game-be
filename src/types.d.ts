@@ -5,6 +5,7 @@ declare global {
     playerName: string;
     creatorEmail: string;
     roomMaxPlayers: number;
+    isPublic: boolean;
   }
 
   interface RoomJoinPayload {
@@ -48,6 +49,7 @@ declare global {
     roomMaxPlayers: number;
     roomPlayers: RoomPlayerData[];
     gameRule: GameRule;
+    isPublic: boolean;
     createdAt: Date;
     updatedAt: Date;
   }

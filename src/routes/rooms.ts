@@ -14,6 +14,7 @@ router.get("/all", (req, res) => {
       category: room.gameRule.category,
       language: room.gameRule.language,
     },
+    isPublic: room.isPublic,
     createdAt: room.createdAt,
     updatedAt: room.updatedAt,
   }));

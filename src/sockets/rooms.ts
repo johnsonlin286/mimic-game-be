@@ -4,7 +4,7 @@ import rooms from "../rooms";
 
 export default function registerRoomHandlers(io: Server, socket: Socket) {
   const roomCreate = (payload: CreateRoomPayload) => {
-    const { playerName, creatorEmail, roomMaxPlayers } = payload;
+    const { playerName, creatorEmail, roomMaxPlayers, isPublic } = payload;
     if (!playerName) {
       socket.emit("room-create-failed", {
         success: false,
@@ -41,11 +41,11 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
     const reformedPlayerName = playerName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
     const roomName = `${reformedPlayerName}-${Date.now().toString()}`;
     const roomData: RoomData = {
-      creatorEmail: payload.creatorEmail,
+      creatorEmail: creatorEmail,
       roomId: roomName,
-      roomMaxPlayers: payload.roomMaxPlayers,
+      roomMaxPlayers: roomMaxPlayers,
       roomPlayers: [
-        { socketId: socket.id, playerName: payload.playerName, playerEmail: payload.creatorEmail, role: "host" },
+        { socketId: socket.id, playerName: playerName, playerEmail: creatorEmail, role: "host" },
       ],
       gameRule: {
         roles: {
@@ -56,6 +56,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
         language: "en",
         status: "waiting",
       },
+      isPublic: isPublic,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -69,6 +70,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
         roomMaxPlayers: roomData.roomMaxPlayers,
         roomPlayers: roomData.roomPlayers,
         gameRule: roomData.gameRule,
+        isPublic: roomData.isPublic,
         createdAt: roomData.createdAt,
         updatedAt: roomData.updatedAt,
       },
@@ -114,6 +116,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
         roomMaxPlayers: room.roomMaxPlayers,
         roomPlayers: room.roomPlayers,
         gameRule: room.gameRule,
+        isPublic: room.isPublic,
         createdAt: room.createdAt,
         updatedAt: room.updatedAt,
       },
@@ -126,6 +129,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
         roomMaxPlayers: room.roomMaxPlayers,
         roomPlayers: room.roomPlayers,
         gameRule: room.gameRule,
+        isPublic: room.isPublic,
         createdAt: room.createdAt,
         updatedAt: room.updatedAt,
       },
@@ -166,6 +170,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
         roomMaxPlayers: room.roomMaxPlayers,
         roomPlayers: room.roomPlayers,
         gameRule: room.gameRule,
+        isPublic: room.isPublic,
         createdAt: room.createdAt,
         updatedAt: room.updatedAt,
       },
@@ -215,6 +220,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
           roomMaxPlayers: room.roomMaxPlayers,
           roomPlayers: room.roomPlayers,
           gameRule: room.gameRule,
+          isPublic: room.isPublic,
           createdAt: room.createdAt,
           updatedAt: room.updatedAt,
         },
@@ -276,6 +282,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
           roomMaxPlayers: room.roomMaxPlayers,
           roomPlayers: room.roomPlayers,
           gameRule: room.gameRule,
+          isPublic: room.isPublic,
           createdAt: room.createdAt,
           updatedAt: room.updatedAt,
         },
