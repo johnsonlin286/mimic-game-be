@@ -6,7 +6,6 @@ const router = Router();
 router.get("/all", (req, res) => {
   const roomData = Array.from(rooms.values()).map(room => ({
     creatorEmail: room.creatorEmail,
-    roomDisplayName: room.roomDisplayName,
     roomId: room.roomId,
     roomMaxPlayers: room.roomMaxPlayers,
     roomPlayers: room.roomPlayers,

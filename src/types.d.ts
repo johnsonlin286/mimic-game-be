@@ -4,9 +4,7 @@ declare global {
   interface CreateRoomPayload {
     playerName: string;
     creatorEmail: string;
-    roomName: string;
     roomMaxPlayers: number;
-    roomPin: string;
   }
 
   interface RoomJoinPayload {
@@ -46,10 +44,8 @@ declare global {
 
   interface RoomData {
     creatorEmail: string;
-    roomDisplayName: string;
     roomId: string;
     roomMaxPlayers: number;
-    roomPin: string;
     roomPlayers: RoomPlayerData[];
     gameRule: GameRule;
     createdAt: Date;

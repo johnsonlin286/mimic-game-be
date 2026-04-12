@@ -19,7 +19,6 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       message: "Game config updated successfully",
       data: {
         roomId: room.roomId,
-        roomDisplayName: room.roomDisplayName,
         roomMaxPlayers: room.roomMaxPlayers,
         roomPlayers: room.roomPlayers,
         gameRule: room.gameRule,
@@ -56,7 +55,6 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       message: "Game started successfully",
       data: {
         roomId: room.roomId,
-        roomDisplayName: room.roomDisplayName,
         roomMaxPlayers: room.roomMaxPlayers,
         roomPlayers: room.roomPlayers,
         gameRule: room.gameRule,

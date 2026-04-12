@@ -4,7 +4,7 @@ import rooms from "../rooms";
 
 export default function registerRoomHandlers(io: Server, socket: Socket) {
   const roomCreate = (payload: CreateRoomPayload) => {
-    const { playerName, creatorEmail, roomName, roomMaxPlayers, roomPin } = payload;
+    const { playerName, creatorEmail, roomMaxPlayers } = payload;
     if (!playerName) {
       socket.emit("room-create-failed", {
         success: false,
@@ -18,17 +18,10 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
         message: "Creator email is required!",
       });
       return;
-    }
-    if (!roomName) {
+    } else if (Array.from(rooms.values()).some(room => room.creatorEmail === creatorEmail)) {
       socket.emit("room-create-failed", {
         success: false,
-        message: "Room name is required!",
-      });
-      return;
-    } else if (roomName.length < 3 || roomName.length > 20) {
-      socket.emit("room-create-failed", {
-        success: false,
-        message: "Room name must be between 3 and 20 characters!",
+        message: "Creator email already exists!",
       });
       return;
     }
@@ -45,26 +38,12 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       });
       return;
     }
-    if (!roomPin) {
-      socket.emit("room-create-failed", {
-        success: false,
-        message: "Room pin is required!",
-      });
-      return;
-    } else if (roomPin.length !== 4) {
-      socket.emit("room-create-failed", {
-        success: false,
-        message: "Room pin must be 4 characters!",
-      });
-      return;
-    }
-    const newName = `${payload.roomName}-${Date.now().toString()}`;
+    const reformedPlayerName = playerName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    const roomName = `${reformedPlayerName}-${Date.now().toString()}`;
     const roomData: RoomData = {
       creatorEmail: payload.creatorEmail,
-      roomDisplayName: payload.roomName,
-      roomId: newName,
+      roomId: roomName,
       roomMaxPlayers: payload.roomMaxPlayers,
-      roomPin: payload.roomPin,
       roomPlayers: [
         { socketId: socket.id, playerName: payload.playerName, playerEmail: payload.creatorEmail, role: "host" },
       ],
@@ -80,19 +59,16 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    rooms.set(newName, roomData);
-    socket.join(newName);
+    rooms.set(roomName, roomData);
+    socket.join(roomName);
     socket.emit("room-created", {
       success: true,
       message: "Room created successfully",
       data: {
         roomId: roomData.roomId,
-        roomDisplayName: roomData.roomDisplayName,
         roomMaxPlayers: roomData.roomMaxPlayers,
         roomPlayers: roomData.roomPlayers,
-        gameRule: {
-          status: "waiting",
-        },
+        gameRule: roomData.gameRule,
         createdAt: roomData.createdAt,
         updatedAt: roomData.updatedAt,
       },
@@ -115,10 +91,10 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       });
       return;
     }
-    if (payload.roomPin !== room.roomPin) {
+    if (Array.from(rooms.values()).some(room => room.roomPlayers.some(player => player.playerEmail === payload.playerEmail))) {
       socket.emit("room-join-failed", {
         success: false,
-        message: "Invalid room pin!",
+        message: "Player already in another room!",
       });
       return;
     }
@@ -135,7 +111,18 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       message: "Room joined successfully",
       data: {
         roomId: room.roomId,
-        roomDisplayName: room.roomDisplayName,
+        roomMaxPlayers: room.roomMaxPlayers,
+        roomPlayers: room.roomPlayers,
+        gameRule: room.gameRule,
+        createdAt: room.createdAt,
+        updatedAt: room.updatedAt,
+      },
+    });
+    io.to(payload.roomId).emit("listen-room-join-success", {
+      success: true,
+      message: `${payload.playerName} joined the room`,
+      data: {
+        roomId: room.roomId,
         roomMaxPlayers: room.roomMaxPlayers,
         roomPlayers: room.roomPlayers,
         gameRule: room.gameRule,
@@ -161,23 +148,21 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
         message: "Player not found",
       });
       return;
+    } else if (Array.from(rooms.values()).some(room => room.roomPlayers.some(player => player.playerEmail === payload.playerEmail))) {
+      socket.emit("room-rejoin-failed", {
+        success: false,
+        message: "Player already in another room!",
+      });
+      return;
     }
     socket.join(payload.roomId);
-    // update player socket id
     player.socketId = payload.socketId;
-    // update room updated at
     room.updatedAt = new Date();
-    if (room.roomPlayers.length >= 3) {
-      room.gameRule.status = "ready";
-    } else {
-      room.gameRule.status = "waiting";
-    }
     io.to(payload.roomId).emit("room-rejoin-success", {
       success: true,
       message: "Room rejoined successfully",
       data: {
         roomId: room.roomId,
-        roomDisplayName: room.roomDisplayName,
         roomMaxPlayers: room.roomMaxPlayers,
         roomPlayers: room.roomPlayers,
         gameRule: room.gameRule,
@@ -227,7 +212,6 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
         message: `${player.playerEmail} left the room`,
         data: {
           roomId: room.roomId,
-          roomDisplayName: room.roomDisplayName,
           roomMaxPlayers: room.roomMaxPlayers,
           roomPlayers: room.roomPlayers,
           gameRule: room.gameRule,
@@ -289,7 +273,6 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       data: {
         room: {
           roomId: room.roomId,
-          roomDisplayName: room.roomDisplayName,
           roomMaxPlayers: room.roomMaxPlayers,
           roomPlayers: room.roomPlayers,
           gameRule: room.gameRule,
