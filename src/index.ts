@@ -7,6 +7,8 @@ import { createServer } from "http";
 import roomRoutes from "./routes/rooms";
 
 import registerRoomHandlers from "./sockets/rooms";
+import registerUtilsHandlers from "./sockets/utils";
+
 import { startRoomGarbageCollector } from "./roomGarbageCollector";
 
 dotenv.config({
@@ -40,7 +42,8 @@ const onConnection = (socket: Socket) => {
   console.log("A user connected");
   
   registerRoomHandlers(io, socket);
-  
+  registerUtilsHandlers(io, socket);
+
   socket.on("disconnect", () => {
     console.log("A user disconnected");
   });
