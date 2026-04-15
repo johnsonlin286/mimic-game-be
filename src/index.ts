@@ -8,6 +8,7 @@ import roomRoutes from "./routes/rooms";
 
 import registerRoomHandlers from "./sockets/rooms";
 import registerUtilsHandlers from "./sockets/utils";
+import registerGameHandlers from "./sockets/game";
 
 import { startRoomGarbageCollector } from "./roomGarbageCollector";
 
@@ -43,6 +44,7 @@ const onConnection = (socket: Socket) => {
   
   registerRoomHandlers(io, socket);
   registerUtilsHandlers(io, socket);
+  registerGameHandlers(io, socket);
 
   socket.on("disconnect", () => {
     console.log("A user disconnected");

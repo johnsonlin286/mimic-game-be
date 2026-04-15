@@ -52,7 +52,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
           mimic: true,
           void: false,
         },
-        category: "general",
+        category: "Food & Drink",
         language: "en",
         status: "waiting",
       },

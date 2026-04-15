@@ -3,10 +3,10 @@ import { Server, Socket } from "socket.io";
 import rooms from "../rooms";
 
 export default function registerGameHandlers(io: Server, socket: Socket) {
-  const gameConfig = (payload: GameConfigPayload) => {
+  const gameRuleUpdate = (payload: GameRuleUpdatePayload) => {
     const room = rooms.get(payload.roomId);
     if (!room) {
-      socket.emit("game-config-failed", {
+      socket.emit("game-rule-update-failed", {
         success: false,
         message: "Room not found",
       });
@@ -14,14 +14,15 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     }
     room.gameRule = payload.gameRule;
     room.updatedAt = new Date();
-    socket.emit("game-config-success", {
+    io.to(payload.roomId).emit("listen-game-rule-update-success", {
       success: true,
-      message: "Game config updated successfully",
+      message: "Game rule updated successfully",
       data: {
         roomId: room.roomId,
         roomMaxPlayers: room.roomMaxPlayers,
         roomPlayers: room.roomPlayers,
         gameRule: room.gameRule,
+        isPublic: room.isPublic,
         createdAt: room.createdAt,
         updatedAt: room.updatedAt,
       },
@@ -50,7 +51,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       success: true,
       message: "Game started successfully",
     });
-    io.to(payload.roomId).emit("game-start-success", {
+    io.to(payload.roomId).emit("listen-game-start-success", {
       success: true,
       message: "Game started successfully",
       data: {
@@ -58,12 +59,13 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
         roomMaxPlayers: room.roomMaxPlayers,
         roomPlayers: room.roomPlayers,
         gameRule: room.gameRule,
+        isPublic: room.isPublic,
         createdAt: room.createdAt,
         updatedAt: room.updatedAt,
       },
     });
   }
 
-  socket.on("game:config", gameConfig)
+  socket.on("game:update-rule", gameRuleUpdate)
   socket.on("game:start", gameStart)
 }

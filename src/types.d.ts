@@ -54,12 +54,16 @@ declare global {
     updatedAt: Date;
   }
 
-  interface GameStartPayload {
+  interface AwaitPlayersPayload {
     roomId: string;
   }
 
-  interface GameConfigPayload {
+  interface GameRuleUpdatePayload {
     roomId: string;
     gameRule: GameRule;
+  }
+
+  interface GameStartPayload {
+    roomId: string;
   }
 }
