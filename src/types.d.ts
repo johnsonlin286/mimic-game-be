@@ -43,12 +43,28 @@ declare global {
     status: "waiting" | "ready" | "playing" | "finished";
   }
 
+  interface PlayerWithRole {
+    socketId: string;
+    playerName: string;
+    playerEmail: string;
+    gameRole: string;
+    gameWord?: string | null;
+  }
+
+  interface GameData {
+    wordPair: {
+      originalWord: string;
+      mimicWord: string;
+    };
+    players: PlayerWithRole[];
+  }
   interface RoomData {
     creatorEmail: string;
     roomId: string;
     roomMaxPlayers: number;
     roomPlayers: RoomPlayerData[];
     gameRule: GameRule;
+    gameData?: GameData;
     isPublic: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -64,6 +80,10 @@ declare global {
   }
 
   interface GameStartPayload {
+    roomId: string;
+  }
+
+  interface GameInitializePayload {
     roomId: string;
   }
 }

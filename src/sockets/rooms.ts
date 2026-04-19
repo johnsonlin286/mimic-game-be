@@ -52,7 +52,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
           mimic: true,
           void: false,
         },
-        category: "Food & Drink",
+        category: "food-drink",
         language: "en",
         status: "waiting",
       },
@@ -70,6 +70,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
         roomMaxPlayers: roomData.roomMaxPlayers,
         roomPlayers: roomData.roomPlayers,
         gameRule: roomData.gameRule,
+        gameData: roomData.gameData,
         isPublic: roomData.isPublic,
         createdAt: roomData.createdAt,
         updatedAt: roomData.updatedAt,
@@ -116,6 +117,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
         roomMaxPlayers: room.roomMaxPlayers,
         roomPlayers: room.roomPlayers,
         gameRule: room.gameRule,
+        gameData: room.gameData,
         isPublic: room.isPublic,
         createdAt: room.createdAt,
         updatedAt: room.updatedAt,
@@ -129,6 +131,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
         roomMaxPlayers: room.roomMaxPlayers,
         roomPlayers: room.roomPlayers,
         gameRule: room.gameRule,
+        gameData: room.gameData,
         isPublic: room.isPublic,
         createdAt: room.createdAt,
         updatedAt: room.updatedAt,
@@ -170,6 +173,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
         roomMaxPlayers: room.roomMaxPlayers,
         roomPlayers: room.roomPlayers,
         gameRule: room.gameRule,
+        gameData: room.gameData,
         isPublic: room.isPublic,
         createdAt: room.createdAt,
         updatedAt: room.updatedAt,
@@ -195,6 +199,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       return;
     }
     if (player.role === "host") {
+      console.log("Host left the room, kicking all players", payload.roomId);
       // kick all players
       room.roomPlayers.forEach(player => {
         const kickPayload: RoomLeavePayload = {
@@ -220,6 +225,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
           roomMaxPlayers: room.roomMaxPlayers,
           roomPlayers: room.roomPlayers,
           gameRule: room.gameRule,
+          gameData: room.gameData,
           isPublic: room.isPublic,
           createdAt: room.createdAt,
           updatedAt: room.updatedAt,
@@ -237,24 +243,25 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
   }
 
   const roomKick = (payload: RoomLeavePayload) => {
+    console.log("Room kick", payload);
     const room = rooms.get(payload.roomId);
     if (!room) {
-      socket.emit("room-kick-not-found", {
+      socket.emit("room-kick-failed", {
         success: false,
         message: "Room not found",
       });
       return;
     }
-    if (room.gameRule.status === "playing") {
-      socket.emit("room-kick-not-allowed", {
-        success: false,
-        message: "Game is in playing state",
-      });
-      return;
-    }
+    // if (room.gameRule.status === "playing") {
+    //   socket.emit("room-kick-failed", {
+    //     success: false,
+    //     message: "Game is in playing state",
+    //   });
+    //   return;
+    // }
     const player = room.roomPlayers.find(player => player.socketId === payload.socketId);
     if (!player) {
-      socket.emit("room-kick-not-found", {
+      socket.emit("room-kick-failed", {
         success: false,
         message: "Player not found",
       });
@@ -282,6 +289,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
           roomMaxPlayers: room.roomMaxPlayers,
           roomPlayers: room.roomPlayers,
           gameRule: room.gameRule,
+          gameData: room.gameData,
           isPublic: room.isPublic,
           createdAt: room.createdAt,
           updatedAt: room.updatedAt,

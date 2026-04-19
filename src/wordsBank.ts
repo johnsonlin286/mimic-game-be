@@ -1,5 +1,6 @@
 const wordsBankEn = {
-  0: {
+  "food-drink": {
+    "id": "food-drink",
     "label": "Food & Drink",
     "words": [
       { "original": "Pancake", "mimic": "Waffle" },
@@ -9,7 +10,8 @@ const wordsBankEn = {
       { "original": "Sushi", "mimic": "Sashimi" }
     ]
   },
-  1: {
+  "animals": {
+    "id": "animals",
     "label": "Animals",
     "words": [
       { "original": "Alligator", "mimic": "Crocodile" },
@@ -19,7 +21,8 @@ const wordsBankEn = {
       { "original": "Bee", "mimic": "Wasp" }
     ]
   },
-  2: {
+  "movies": {
+    "id": "movies",
     "label": "Movies",
     "words": [
       { "original": "Horror", "mimic": "Thriller" },
@@ -29,7 +32,8 @@ const wordsBankEn = {
       { "original": "Actor", "mimic": "Extra" }
     ]
   },
-  3: {
+  "places": {
+    "id": "places",
     "label": "Places",
     "words": [
       { "original": "Hospital", "mimic": "Clinic" },
@@ -39,7 +43,8 @@ const wordsBankEn = {
       { "original": "Mountain", "mimic": "Hill" }
     ]
   },
-  4: {
+  "technology": {
+    "id": "technology",
     "label": "Technology",
     "words": [
       { "original": "Laptop", "mimic": "Desktop" },
@@ -52,7 +57,8 @@ const wordsBankEn = {
 }
 
 const wordsBankId = {
-  0: {
+  "food-drink": {
+    "id": "food-drink",
     "label": "Makanan & Minuman",
     "words": [
       { "original": "Mie", "mimic": "Bihun" },
@@ -62,7 +68,8 @@ const wordsBankId = {
       { "original": "Kopi", "mimic": "Teh" }
     ]
   },
-  1: {
+  "animals": {
+    "id": "animals",
     "label": "Hewan",
     "words": [
       { "original": "Penyu", "mimic": "Kura-kura" },
@@ -72,7 +79,8 @@ const wordsBankId = {
       { "original": "Lebah", "mimic": "Tawon" }
     ]
   },
-  2: {
+  "movies": {
+    "id": "movies",
     "label": "Film",
     "words": [
       { "original": "Animasi", "mimic": "Kartun" },
@@ -82,7 +90,8 @@ const wordsBankId = {
       { "original": "Bioskop", "mimic": "Teater" }
     ]
   },
-  3: {
+  "places": {
+    "id": "places",
     "label": "Tempat",
     "words": [
       { "original": "Restoran", "mimic": "Kafe" },
@@ -92,7 +101,8 @@ const wordsBankId = {
       { "original": "Gunung", "mimic": "Bukit" }
     ]
   },
-  4: {
+  "technology": {
+    "id": "technology",
     "label": "Teknologi",
     "words": [
       { "original": "Flashdisk", "mimic": "Hardisk" },
@@ -104,4 +114,27 @@ const wordsBankId = {
   }
 }
 
-export { wordsBankEn, wordsBankId };
+const returnWordsBank = (lang: string) => {
+  switch (lang) {
+    case "en":
+      return wordsBankEn;
+    case "id":
+      return wordsBankId;
+    default:
+      return wordsBankEn;
+  }
+}
+
+const randomWordPair = (language: string, categoryId: string) => {
+  const wordsBank = returnWordsBank(language);
+  const selectedCategory = wordsBank[categoryId as keyof typeof wordsBank];
+  const wordsArray = selectedCategory.words;
+  const randomIndex = Math.floor(Math.random() * wordsArray.length);
+  const wordPair = wordsArray[randomIndex];
+  return {
+    originalWord: wordPair?.original || '',
+    mimicWord: wordPair?.mimic || '',
+  }
+}
+
+export { returnWordsBank, randomWordPair };
