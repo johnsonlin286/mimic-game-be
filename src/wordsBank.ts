@@ -125,10 +125,16 @@ const returnWordsBank = (lang: string) => {
   }
 }
 
-const randomWordPair = (language: string, categoryId: string) => {
+const randomWordPair = (language: string, categoryId: string, usedWordPairs?: WordPair[]) => {
   const wordsBank = returnWordsBank(language);
   const selectedCategory = wordsBank[categoryId as keyof typeof wordsBank];
-  const wordsArray = selectedCategory.words;
+  let wordsArray = selectedCategory.words;
+  if (usedWordPairs) {
+    wordsArray = wordsArray.filter(wordPair => !usedWordPairs.includes(wordPair));
+  }
+  if (wordsArray.length === 0) {
+    wordsArray = selectedCategory.words;
+  }
   const randomIndex = Math.floor(Math.random() * wordsArray.length);
   const wordPair = wordsArray[randomIndex];
   return {

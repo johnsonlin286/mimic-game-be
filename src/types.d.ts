@@ -43,19 +43,21 @@ declare global {
     status: "waiting" | "ready" | "playing" | "finished";
   }
 
+interface WordPair {}
+
   interface PlayerWithRole {
     socketId: string;
     playerName: string;
     playerEmail: string;
     gameRole: string;
     gameWord?: string | null;
+    hasVoted: boolean;
+    voters: Partial<PlayerWithRole>[];
+    isAlive: boolean;
   }
 
   interface GameData {
-    wordPair: {
-      originalWord: string;
-      mimicWord: string;
-    };
+    wordPairList: WordPair[];
     players: PlayerWithRole[];
   }
   interface RoomData {
@@ -80,10 +82,27 @@ declare global {
   }
 
   interface GameStartPayload {
+    playerEmail: string;
     roomId: string;
   }
 
   interface GameInitializePayload {
+    roomId: string;
+  }
+
+  interface GameStartVotePayload {
+    playerEmail: string;
+    roomId: string;
+  }
+
+  interface GameVoteResponsePayload {
+    playerEmail: string;
+    roomId: string;
+    votedEmail: string;
+  }
+
+  interface GameCalculateResultsPayload {
+    playerEmail: string;
     roomId: string;
   }
 }

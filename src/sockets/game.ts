@@ -20,12 +20,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       success: true,
       message: "Game rule updated successfully",
       data: {
-        roomId: room.roomId,
-        roomMaxPlayers: room.roomMaxPlayers,
-        roomPlayers: room.roomPlayers,
         gameRule: room.gameRule,
-        isPublic: room.isPublic,
-        createdAt: room.createdAt,
         updatedAt: room.updatedAt,
       },
     });
@@ -37,6 +32,21 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       socket.emit("game-start-failed", {
         success: false,
         message: "Room not found",
+      });
+      return;
+    }
+    const player = room.roomPlayers.find(player => player.playerEmail === payload.playerEmail);
+    if (!player) {
+      socket.emit("game-initialize-failed", {
+        success: false,
+        message: "Player not found",
+      });
+      return;
+    }
+    if (player.role !== "host") {
+      socket.emit("game-initialize-failed", {
+        success: false,
+        message: "Player is not the host",
       });
       return;
     }
@@ -59,15 +69,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     io.to(payload.roomId).emit("listen-game-start-success", {
       success: true,
       message: "Game started successfully",
-      data: {
-        roomId: room.roomId,
-        roomMaxPlayers: room.roomMaxPlayers,
-        roomPlayers: room.roomPlayers,
-        gameRule: room.gameRule,
-        isPublic: room.isPublic,
-        createdAt: room.createdAt,
-        updatedAt: room.updatedAt,
-      },
+      data: room,
     });
   }
 
@@ -99,17 +101,20 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       playerName: player.playerName,
       playerEmail: player.playerEmail,
       gameRole: shuffledRoleDeck[index],
+      hasVoted: false,
+      voters: [],
+      isAlive: true,
     }));
 
-    const wordPair = randomWordPair(room.gameRule.language, room.gameRule.category);
+    const newWordPair = randomWordPair(room.gameRule.language, room.gameRule.category, room.gameData?.wordPairList);
 
     const getGameWord = (gameRole: string) => {
       if (gameRole === "mimic") {
-        return wordPair.mimicWord;
+        return newWordPair.mimicWord;
       } else if (gameRole === "void") {
         return null;
       } else if (gameRole === "original") {
-        return wordPair.originalWord;
+        return newWordPair.originalWord;
       }
       return null;
     }
@@ -119,7 +124,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     });
 
     room.gameData = {
-      wordPair: wordPair,
+      wordPairList: [...room.gameData?.wordPairList || [], newWordPair],
       players: playersWithRoles,
     };
     room.updatedAt = new Date();
@@ -127,7 +132,18 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       success: true,
       message: "Game initialized successfully",
       data: {
-        updatedAt: room.updatedAt,
+        ...room,
+        gameData: {
+          wordPairList: undefined,
+          players: room.gameData?.players.map(player => ({
+            socketId: player.socketId,
+            playerName: player.playerName,
+            playerEmail: player.playerEmail,
+            hasVoted: player.hasVoted,
+            voters: player.voters || [],
+            isAlive: player.isAlive,
+          })) || [],
+        },
       },
     });
     room.roomPlayers.forEach(player => {
@@ -135,14 +151,194 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
         success: true,
         message: "Game initialized successfully",
         data: {
-          gameRole: room.gameData?.players.find(p => p.socketId === player.socketId)?.gameRole || null,
-          gameWord: room.gameData?.players.find(p => p.socketId === player.socketId)?.gameWord || null,
+          gameRole: room.gameData?.players.find(p => p.playerEmail === player.playerEmail)?.gameRole || null,
+          gameWord: room.gameData?.players.find(p => p.playerEmail === player.playerEmail)?.gameWord || null,
         },
       });
     });
   }
 
+  const gameStartVote = (payload: GameStartVotePayload) => {
+    const room = rooms.get(payload.roomId);
+    if (!room) {
+      socket.emit("game-start-vote-failed", {
+        success: false,
+        message: "Room not found",
+      });
+      return;
+    }
+    const player = room.roomPlayers.find(player => player.playerEmail === payload.playerEmail);
+    if (!player) {
+      socket.emit("game-start-vote-failed", {
+        success: false,
+        message: "Player not found",
+      });
+      return;
+    }
+    if (player.role !== "host") {
+      socket.emit("game-start-vote-failed", {
+        success: false,
+        message: "Player is not the host",
+      });
+      return;
+    }
+    if (room.gameRule.status !== "playing") {
+      socket.emit("game-start-vote-failed", {
+        success: false,
+        message: "Game is not in playing state",
+      });
+      return;
+    }
+    room.updatedAt = new Date();
+    io.to(payload.roomId).emit("listen-game-start-vote", {
+      success: true,
+      message: "Game start vote requested",
+      data: {
+        ...room,
+        gameData: {
+          wordPairList: undefined,
+          players: room.gameData?.players.map(player => ({
+            socketId: player.socketId,
+            playerName: player.playerName,
+            playerEmail: player.playerEmail,
+            hasVoted: player.hasVoted,
+            voters: player.voters || [],
+            isAlive: player.isAlive,
+          })) || [],
+        },
+      }
+    });
+  }
+
+  const gameVoteResponse = (payload: GameVoteResponsePayload) => {
+    const room = rooms.get(payload.roomId);
+    if (!room) {
+      socket.emit("game-vote-response-failed", {
+        success: false,
+        message: "Room not found",
+      });
+      return;
+    }
+    const player = room.gameData?.players.find(player => player.playerEmail === payload.playerEmail);
+    if (!player) {
+      socket.emit("game-vote-response-failed", {
+        success: false,
+        message: "Player not found",
+      });
+      return;
+    }
+    const allPlayers = room.gameData?.players || [];
+
+    // If player already voted, we may need to no-op or move the vote.
+    if (player.hasVoted) {
+      const alreadyVotedForThisTarget = allPlayers
+        .find(p => p.playerEmail === payload.votedEmail)
+        ?.voters?.some(v => v.playerEmail === payload.playerEmail);
+
+      // If they are voting for the same target again, do nothing.
+      if (alreadyVotedForThisTarget) return;
+
+      // Otherwise remove voter from any previous target(s).
+      allPlayers.forEach(p => {
+        if ((p.voters || []).some(v => v.playerEmail === payload.playerEmail)) {
+          p.voters = (p.voters || []).filter(v => v.playerEmail !== payload.playerEmail);
+        }
+      });
+    }
+
+    // If votedEmail is provided, add the vote to that target.
+    if (payload.votedEmail) {
+      const votedPlayer = allPlayers.find(p => p.playerEmail === payload.votedEmail);
+      if (!votedPlayer) {
+        socket.emit("game-vote-response-failed", {
+          success: false,
+          message: "Voted player not found",
+        });
+        return;
+      }
+
+      // Idempotency guard: don't add duplicates.
+      const alreadyInVoters = (votedPlayer.voters || []).some(v => v.playerEmail === payload.playerEmail);
+      if (!alreadyInVoters) {
+        votedPlayer.voters = votedPlayer.voters || [];
+        votedPlayer.voters.push({
+          socketId: player.socketId,
+          playerName: player.playerName,
+          playerEmail: player.playerEmail,
+        });
+      }
+
+      // mark as voted when we have a valid target
+      player.hasVoted = true;
+    }
+
+    room.updatedAt = new Date();
+    io.to(payload.roomId).emit("listen-game-vote-response", {
+      success: true,
+      message: "Game vote response received",
+      data: {
+        ...room,
+        gameData: {
+          wordPairList: undefined,
+          players: room.gameData?.players.map(player => ({
+            socketId: player.socketId,
+            playerName: player.playerName,
+            playerEmail: player.playerEmail,
+            hasVoted: player.hasVoted,
+            voters: player.voters || [],
+            isAlive: player.isAlive,
+          })) || [],
+        }
+      }
+    });
+    // check if all players have voted
+    if (room.gameData?.players.every(player => player.hasVoted)) {
+      room.updatedAt = new Date();
+      io.to(payload.roomId).emit("listen-game-all-players-voted", {
+        success: true,
+        message: "All players have voted",
+      });
+    }
+  }
+
+  const gameCalculateResults = (payload: GameCalculateResultsPayload) => {
+    const room = rooms.get(payload.roomId);
+    if (!room) {
+      socket.emit("game-calculate-results-failed", {
+        success: false,
+        message: "Room not found",
+      });
+      return;
+    }
+    if (room.gameRule.status !== "playing") {
+      socket.emit("game-calculate-results-failed", {
+        success: false,
+        message: "Game is not in playing state",
+      });
+      return;
+    }
+    const player = room.roomPlayers.find(player => player.playerEmail === payload.playerEmail);
+    if (!player) {
+      socket.emit("game-calculate-results-failed", {
+        success: false,
+        message: "Player not found",
+      });
+      return;
+    }
+    if (player.role !== "host") {
+      socket.emit("game-calculate-results-failed", {
+        success: false,
+        message: "Player is not the host",
+      });
+      return;
+    }
+    // calculate results
+  }
+
   socket.on("game:update-rule", gameRuleUpdate)
   socket.on("game:start", gameStart)
   socket.on("game:initialize", gameInitialize)
+  socket.on("game:start-vote", gameStartVote)
+  socket.on("game:vote-response", gameVoteResponse)
+  socket.on("game:calculate-results", gameCalculateResults)
 }
