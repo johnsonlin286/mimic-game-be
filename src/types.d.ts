@@ -101,7 +101,7 @@ interface WordPair {}
     votedEmail: string;
   }
 
-  interface GameCalculateResultsPayload {
+  interface GameCalculateVotePayload {
     playerEmail: string;
     roomId: string;
   }

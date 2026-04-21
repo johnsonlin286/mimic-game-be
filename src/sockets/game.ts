@@ -3,6 +3,7 @@ import { Server, Socket } from "socket.io";
 import rooms from "../rooms";
 import { calculateRoles, fisherYatesShuffle } from "../algorithmScript";
 import { randomWordPair } from "../wordsBank";
+import calculateVoteResults from "../voteScript";
 
 export default function registerGameHandlers(io: Server, socket: Socket) {
   const gameRuleUpdate = (payload: GameRuleUpdatePayload) => {
@@ -20,12 +21,11 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       success: true,
       message: "Game rule updated successfully",
       data: {
-        gameRule: room.gameRule,
-        updatedAt: room.updatedAt,
+        ...room,
       },
     });
   }
-  
+
   const gameStart = (payload: GameStartPayload) => {
     const room = rooms.get(payload.roomId);
     if (!room) {
@@ -301,7 +301,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     }
   }
 
-  const gameCalculateResults = (payload: GameCalculateResultsPayload) => {
+  const gameCalculateVote = (payload: GameCalculateVotePayload) => {
     const room = rooms.get(payload.roomId);
     if (!room) {
       socket.emit("game-calculate-results-failed", {
@@ -333,6 +333,125 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       return;
     }
     // calculate results
+    const results = calculateVoteResults(room.gameData?.players || []);
+    room.updatedAt = new Date();
+    if (results.success) {
+      // update room game data
+      room.gameData = {
+        wordPairList: room.gameData?.wordPairList || [],
+        players: results.data.players,
+      };
+      const { message } = results;
+      switch (message) {
+        case "Mimic is the winner":
+          io.to(payload.roomId).emit("listen-game-calculate-results", {
+            success: true,
+            message: "Mimic is the winner",
+            data: {
+              ...room,
+              gameData: {
+                wordPairList: undefined,
+                players: room.gameData?.players.map(player => ({
+                  socketId: player.socketId,
+                  playerName: player.playerName,
+                  playerEmail: player.playerEmail,
+                  hasVoted: player.hasVoted,
+                  voters: player.voters || [],
+                  isAlive: player.isAlive,
+                })) || [],
+              },
+            }
+          });
+          break;
+        case "Void guess the word":
+          const voidPlayer = room.gameData?.players.find(player => player.gameRole === "void" && player.isAlive);
+          if (!voidPlayer) {
+            io.to(payload.roomId).emit("game-calculate-results-failed", {
+              success: false,
+              message: "Void player not found",
+            });
+            return;
+          }
+          // emit the void player's game word
+          io.to(voidPlayer.socketId).emit("listen-game-void-guess-the-word", {
+            success: true,
+            message: "Void guessed the word",
+          });
+          io.to(payload.roomId).emit("listen-game-void-got-caught", {
+            success: true,
+            message: "Void got caught!",
+            data: {
+              ...room,
+              gameData: {
+                wordPairList: undefined,
+                players: room.gameData?.players.map(player => ({
+                  socketId: player.socketId,
+                  playerName: player.playerName,
+                  playerEmail: player.playerEmail,
+                  hasVoted: player.hasVoted,
+                  voters: player.voters || [],
+                  isAlive: player.isAlive,
+                })) || [],
+              },
+            }
+          });
+          break;
+        case "Void is the winner":
+          io.to(payload.roomId).emit("listen-game-calculate-results", {
+            success: true,
+            message: "Void is the winner",
+            data: {
+              ...room,
+            }
+          });
+          break;
+        case "Original is the winner":
+          io.to(payload.roomId).emit("listen-game-calculate-results", {
+            success: true,
+            message: "Original is the winner",
+            data: {
+              ...room,
+              gameData: {
+                wordPairList: undefined,
+                players: room.gameData?.players.map(player => ({
+                  socketId: player.socketId,
+                  playerName: player.playerName,
+                  playerEmail: player.playerEmail,
+                  hasVoted: player.hasVoted,
+                  voters: player.voters || [],
+                  isAlive: player.isAlive,
+                })) || [],
+              },
+            }
+          });
+          break;
+        default:
+          io.to(payload.roomId).emit("listen-game-calculate-results", {
+            success: true,
+            message: "Game continue",
+            data: {
+              ...room,
+              gameData: {
+                wordPairList: undefined,
+                players: room.gameData?.players.map(player => ({
+                  socketId: player.socketId,
+                  playerName: player.playerName,
+                  playerEmail: player.playerEmail,
+                  hasVoted: player.hasVoted,
+                  voters: player.voters || [],
+                  isAlive: player.isAlive,
+                })) || [],
+              },
+            }
+          });
+          break;
+      }
+    } else {
+      socket.emit("game-calculate-results-failed", {
+        success: false,
+        message: results.message,
+      });
+    }
   }
 
   socket.on("game:update-rule", gameRuleUpdate)
@@ -340,5 +459,5 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
   socket.on("game:initialize", gameInitialize)
   socket.on("game:start-vote", gameStartVote)
   socket.on("game:vote-response", gameVoteResponse)
-  socket.on("game:calculate-results", gameCalculateResults)
+  socket.on("game:calculate-results", gameCalculateVote)
 }
