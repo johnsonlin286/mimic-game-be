@@ -130,7 +130,8 @@ const randomWordPair = (language: string, categoryId: string, usedWordPairs?: Wo
   const selectedCategory = wordsBank[categoryId as keyof typeof wordsBank];
   let wordsArray = selectedCategory.words;
   if (usedWordPairs) {
-    wordsArray = wordsArray.filter(wordPair => !usedWordPairs.includes(wordPair));
+    // remove used original words from words array
+    wordsArray = wordsArray.filter(wordPair => !usedWordPairs.some(usedWordPair => usedWordPair.originalWord === wordPair.original));
   }
   if (wordsArray.length === 0) {
     wordsArray = selectedCategory.words;

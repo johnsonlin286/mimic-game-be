@@ -43,7 +43,10 @@ declare global {
     status: "waiting" | "ready" | "playing" | "finished";
   }
 
-interface WordPair {}
+  interface WordPair {
+    originalWord: string;
+    mimicWord: string;
+  }
 
   interface PlayerWithRole {
     socketId: string;
@@ -102,6 +105,22 @@ interface WordPair {}
   }
 
   interface GameCalculateVotePayload {
+    playerEmail: string;
+    roomId: string;
+  }
+
+  interface GameVoidGuessTheWordPayload {
+    playerEmail: string;
+    roomId: string;
+    guessWord: string;
+  }
+
+  interface GameContinuePayload {
+    playerEmail: string;
+    roomId: string;
+  }
+
+  interface GameRestartPayload {
     playerEmail: string;
     roomId: string;
   }

@@ -66,6 +66,9 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     // }
     room.gameRule.status = "playing";
     room.updatedAt = new Date();
+    socket.emit("initialize-game", {
+      success: true,
+    })
     io.to(payload.roomId).emit("listen-game-start-success", {
       success: true,
       message: "Game started successfully",
@@ -106,7 +109,11 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       isAlive: true,
     }));
 
+    console.log("playersWithRoles 109", room.gameData?.wordPairList);
+
     const newWordPair = randomWordPair(room.gameRule.language, room.gameRule.category, room.gameData?.wordPairList);
+
+    console.log("newWordPair 113", newWordPair);
 
     const getGameWord = (gameRole: string) => {
       if (gameRole === "mimic") {
@@ -124,7 +131,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     });
 
     room.gameData = {
-      wordPairList: [...room.gameData?.wordPairList || [], newWordPair],
+      wordPairList: [newWordPair],
       players: playersWithRoles,
     };
     room.updatedAt = new Date();
@@ -227,6 +234,13 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       });
       return;
     }
+    if (!player.isAlive) {
+      socket.emit("game-vote-response-failed", {
+        success: false,
+        message: "Player is not alive",
+      });
+      return;
+    }
     const allPlayers = room.gameData?.players || [];
 
     // If player already voted, we may need to no-op or move the vote.
@@ -291,8 +305,9 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
         }
       }
     });
-    // check if all players have voted
-    if (room.gameData?.players.every(player => player.hasVoted)) {
+    // check if all players who are alive have voted
+    const alivePlayers = room.gameData?.players.filter(player => player.isAlive) || [];
+    if (alivePlayers.every(player => player.hasVoted)) {
       room.updatedAt = new Date();
       io.to(payload.roomId).emit("listen-game-all-players-voted", {
         success: true,
@@ -364,7 +379,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
           });
           break;
         case "Void guess the word":
-          const voidPlayer = room.gameData?.players.find(player => player.gameRole === "void" && player.isAlive);
+          const voidPlayer = room.gameData?.players.find(player => player.gameRole === "void");
           if (!voidPlayer) {
             io.to(payload.roomId).emit("game-calculate-results-failed", {
               success: false,
@@ -373,11 +388,11 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
             return;
           }
           // emit the void player's game word
-          io.to(voidPlayer.socketId).emit("listen-game-void-guess-the-word", {
+          io.to(voidPlayer.socketId).emit("listen-game-void-got-caught", {
             success: true,
             message: "Void guessed the word",
           });
-          io.to(payload.roomId).emit("listen-game-void-got-caught", {
+          io.to(payload.roomId).emit("listen-game-calculate-results", {
             success: true,
             message: "Void got caught!",
             data: {
@@ -454,10 +469,180 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     }
   }
 
+  const gameVoidGuessTheWord = (payload: GameVoidGuessTheWordPayload) => {
+    const room = rooms.get(payload.roomId);
+    if (!room) {
+      socket.emit("game-void-guess-the-word-failed", {
+        success: false,
+        message: "Room not found",
+      });
+      return;
+    }
+    const player = room.gameData?.players.find(player => player.playerEmail === payload.playerEmail);
+    if (!player) {
+      socket.emit("game-void-guess-the-word-failed", {
+        success: false,
+        message: "Player not found",
+      });
+      return;
+    }
+    if (player.gameRole !== "void") {
+      socket.emit("game-void-guess-the-word-failed", {
+        success: false,
+        message: "Player is not the void",
+      });
+      return;
+    }
+    if (room.gameData?.wordPairList[0]?.originalWord.toLowerCase() !== payload.guessWord.toLowerCase()) {
+      // void guessed the word incorrectly
+      const updatedPlayers =
+        room.gameData?.players.map(p =>
+          p.playerEmail === payload.playerEmail ? { ...p, isAlive: false } : p
+        ) || [];
+
+      room.gameData = {
+        wordPairList: room.gameData?.wordPairList || [],
+        players: updatedPlayers,
+      };
+      room.updatedAt = new Date();
+
+      let originalCount = 0;
+      let mimicCount = 0;
+      let voidCount = 0;
+      for (const p of updatedPlayers) {
+        if (!p.isAlive) continue;
+        if (p.gameRole === "original") originalCount += 1;
+        else if (p.gameRole === "mimic") mimicCount += 1;
+        else if (p.gameRole === "void") voidCount += 1;
+      }
+
+      let outcomeMessage: string = "Game continue";
+      if (mimicCount === 0 && voidCount === 0) outcomeMessage = "Original is the winner";
+      else if (originalCount === 0) outcomeMessage = voidCount > 0 ? "Void is the winner" : "Mimic is the winner";
+      else if (originalCount <= mimicCount + voidCount) outcomeMessage = mimicCount > 0 ? "Mimic is the winner" : "Void is the winner";
+
+      io.to(payload.roomId).emit("listen-game-void-guess-the-word-incorrectly", {
+        success: true,
+        message: "Void guessed the word incorrectly",
+        data: {
+          outcomeMessage,
+          room: {
+            ...room,
+            gameData: {
+              wordPairList: undefined,
+              players: updatedPlayers.map(player => ({
+                socketId: player.socketId,
+                playerName: player.playerName,
+                playerEmail: player.playerEmail,
+                hasVoted: player.hasVoted,
+                voters: player.voters || [],
+                isAlive: player.isAlive,
+              })),
+            },
+          },
+        },
+      });
+    } else {
+      io.to(payload.roomId).emit("listen-game-void-guess-the-word-correctly", {
+        success: true,
+        message: "Void guessed the word correctly",
+      });
+    }
+  }
+
+  const gameContinue = (payload: GameContinuePayload) => {
+    const room = rooms.get(payload.roomId);
+    if (!room) {
+      socket.emit("game-continue-failed", {
+        success: false,
+        message: "Room not found",
+      });
+      return;
+    }
+    const player = room.roomPlayers.find(player => player.playerEmail === payload.playerEmail);
+    if (!player) {
+      socket.emit("game-continue-failed", {
+        success: false,
+        message: "Player not found",
+      });
+      return;
+    }
+    if (player.role !== "host") {
+      socket.emit("game-continue-failed", {
+        success: false,
+        message: "Player is not the host",
+      });
+      return;
+    }
+    if (room.gameRule.status !== "playing") {
+      socket.emit("game-continue-failed", {
+        success: false, 
+        message: "Game is not in playing state",
+      });
+      return;
+    }
+    // clean gameData.players.voters
+    room.gameData?.players.forEach(p => {
+      p.voters = [];
+      p.hasVoted = false;
+    });
+    room.updatedAt = new Date();
+    io.to(payload.roomId).emit("listen-game-continue-success", {
+      success: true,
+      message: "Game continued successfully",
+      data: {
+        ...room,
+        gameData: {
+          wordPairList: undefined,
+          players: room.gameData?.players.map(player => ({
+            socketId: player.socketId,
+            playerName: player.playerName,
+            playerEmail: player.playerEmail,
+            hasVoted: player.hasVoted,
+            voters: player.voters || [],
+            isAlive: player.isAlive,
+          })) || [],
+        },
+      },
+    });
+  }
+
+  const gameRestart = (payload: GameRestartPayload) => {
+    const room = rooms.get(payload.roomId);
+    if (!room) {
+      socket.emit("game-restart-failed", {
+        success: false,
+        message: "Room not found",
+      });
+      return;
+    }
+    // change room game rule status to ready, clear game data
+    room.gameRule.status = "ready";
+    room.gameData = {
+      wordPairList: [],
+      players: [],
+    };
+    room.updatedAt = new Date();
+    io.to(payload.roomId).emit("listen-game-restart-success", {
+      success: true,
+      message: "Game restarted successfully",
+      data: {
+        ...room,
+        gameData: {
+          wordPairList: undefined,
+          players: [],
+        },
+      },
+    });
+  }
+
   socket.on("game:update-rule", gameRuleUpdate)
   socket.on("game:start", gameStart)
   socket.on("game:initialize", gameInitialize)
   socket.on("game:start-vote", gameStartVote)
   socket.on("game:vote-response", gameVoteResponse)
   socket.on("game:calculate-results", gameCalculateVote)
+  socket.on("game:void-guess-the-word", gameVoidGuessTheWord)
+  socket.on("game:continue", gameContinue)
+  socket.on("game:restart", gameRestart)
 }
