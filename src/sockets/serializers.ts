@@ -51,17 +51,28 @@ export function roomBroadcast(room: RoomData) {
   };
 }
 
+interface GameBroadcastOptions {
+  /** Reveal each player's `gameRole` and `gameWord`. Default: false. */
+  includeRoles?: boolean;
+  /** Include the historical `wordPairList`. Use when the round/game ends. */
+  includeWordPairList?: boolean;
+}
+
 /**
  * Broadcast view of a room used by `game.ts` events while a round is active.
- * Strips `wordPairList` and any per-player role/word data.
+ * Strips `wordPairList` and any per-player role/word data by default; opt-in
+ * via `options` when revealing end-of-round / end-of-game info.
  */
-export function gameBroadcast(room: RoomData, includeRoles = false) {
+export function gameBroadcast(room: RoomData, options: GameBroadcastOptions = {}) {
+  const { includeRoles = false, includeWordPairList = false } = options;
   const players = room.gameData?.players ?? [];
   return {
     ...room,
     gameData: {
-      wordPairList: room.gameData?.wordPairList ?? [],
       players: players.map(includeRoles ? publicPlayer : maskedPlayer),
+      ...(includeWordPairList
+        ? { wordPairList: room.gameData?.wordPairList ?? [] }
+        : {}),
     },
   };
 }

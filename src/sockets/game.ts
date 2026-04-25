@@ -288,10 +288,14 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       results.message === "Game continue" ? "Game continue" :
       results.message;
 
+    // When someone has won we expose the full word history so the client can
+    // show what every round's pair was. Mid-game broadcasts stay sanitized.
+    const isWinner = message.endsWith("is the winner");
+
     io.to(payload.roomId).emit("listen-game-calculate-results", {
       success: true,
       message,
-      data: gameBroadcast(room),
+      data: gameBroadcast(room, { includeWordPairList: isWinner }),
     });
   };
 
