@@ -50,20 +50,20 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       });
       return;
     }
-    // if (room.roomPlayers.length < 3) {
-    //   socket.emit("game-start-failed", {
-    //     success: false,
-    //     message: "Room players are less than 3",
-    //   });
-    //   return;
-    // }
-    // if (room.gameRule.status !== "ready") {
-    //   socket.emit("game-start-failed", {
-    //     success: false,
-    //     message: "Game is not in ready state",
-    //   });
-    //   return;
-    // }
+    if (room.roomPlayers.length < 3) {
+      socket.emit("game-start-failed", {
+        success: false,
+        message: "Room players are less than 3",
+      });
+      return;
+    }
+    if (room.gameRule.status !== "ready") {
+      socket.emit("game-start-failed", {
+        success: false,
+        message: "Game is not in ready state",
+      });
+      return;
+    }
     room.gameRule.status = "playing";
     room.updatedAt = new Date();
     socket.emit("initialize-game", {
@@ -92,6 +92,23 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       });
       return;
     }
+    if (payload.playerEmail) {
+      const player = room.roomPlayers.find(player => player.playerEmail === payload.playerEmail);
+      if (!player) {
+        socket.emit("game-initialize-failed", {
+          success: false,
+          message: "Player not found",
+        });
+        return;
+      }
+      if (player.role !== "host") {
+        socket.emit("game-initialize-failed", {
+          success: false,
+          message: "Player is not the host",
+        });
+        return;
+      }
+    }
     const { numMimics, numVoids, numOriginals } = calculateRoles(room.roomPlayers.length, room.gameRule.roles.void);
     const roleDeck = [];
     for (let i = 0; i < numMimics; i++) roleDeck.push("mimic");
@@ -109,11 +126,11 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       isAlive: true,
     }));
 
-    console.log("playersWithRoles 109", room.gameData?.wordPairList);
+    // console.log("playersWithRoles 109", room.gameData?.wordPairList);
 
-    const newWordPair = randomWordPair(room.gameRule.language, room.gameRule.category, room.gameData?.wordPairList);
+    const newWordPair = randomWordPair(room.gameRule.language, room.gameRule.category, room.gameData?.wordPairList || []);
 
-    console.log("newWordPair 113", newWordPair);
+    // console.log("newWordPair 113", newWordPair);
 
     const getGameWord = (gameRole: string) => {
       if (gameRole === "mimic") {
@@ -130,9 +147,18 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       player.gameWord = getGameWord(player.gameRole);
     });
 
+    console.log(newWordPair.hasNoMoreWords)
+    if (newWordPair.hasNoMoreWords) {
+      console.log("hasNoMoreWords")
+      room.gameData = {
+        players: playersWithRoles,
+        wordPairList: [newWordPair],
+      };
+    }
+
     room.gameData = {
-      wordPairList: [newWordPair],
       players: playersWithRoles,
+      wordPairList: [newWordPair, ...(room.gameData?.wordPairList || [])],
     };
     room.updatedAt = new Date();
     io.to(payload.roomId).emit("listen-game-initialize-success", {
@@ -365,7 +391,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
             data: {
               ...room,
               gameData: {
-                wordPairList: undefined,
+                wordPairList: room.gameData?.wordPairList || [],
                 players: room.gameData?.players.map(player => ({
                   socketId: player.socketId,
                   playerName: player.playerName,
@@ -427,7 +453,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
             data: {
               ...room,
               gameData: {
-                wordPairList: undefined,
+                wordPairList: room.gameData?.wordPairList || [],
                 players: room.gameData?.players.map(player => ({
                   socketId: player.socketId,
                   playerName: player.playerName,
@@ -595,12 +621,9 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
         gameData: {
           wordPairList: undefined,
           players: room.gameData?.players.map(player => ({
-            socketId: player.socketId,
-            playerName: player.playerName,
-            playerEmail: player.playerEmail,
-            hasVoted: player.hasVoted,
-            voters: player.voters || [],
-            isAlive: player.isAlive,
+            ...player,
+            gameRole: null,
+            gameWord: null,
           })) || [],
         },
       },

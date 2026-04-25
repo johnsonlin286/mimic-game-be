@@ -130,17 +130,23 @@ const randomWordPair = (language: string, categoryId: string, usedWordPairs?: Wo
   const selectedCategory = wordsBank[categoryId as keyof typeof wordsBank];
   let wordsArray = selectedCategory.words;
   if (usedWordPairs) {
-    // remove used original words from words array
-    wordsArray = wordsArray.filter(wordPair => !usedWordPairs.some(usedWordPair => usedWordPair.originalWord === wordPair.original));
+    // remove usedWordPairs from wordsBank array
+    wordsArray = wordsArray.filter(wordPair => !usedWordPairs.some(usedWordPair => usedWordPair.originalWord === wordPair.original && usedWordPair.mimicWord === wordPair.mimic));
   }
+  console.log(usedWordPairs)
+  console.log(wordsArray)
+  let hasNoMoreWords = false;
   if (wordsArray.length === 0) {
     wordsArray = selectedCategory.words;
+    hasNoMoreWords = true;
   }
   const randomIndex = Math.floor(Math.random() * wordsArray.length);
   const wordPair = wordsArray[randomIndex];
+  console.log("wordPair", wordPair);
   return {
     originalWord: wordPair?.original || '',
     mimicWord: wordPair?.mimic || '',
+    hasNoMoreWords,
   }
 }
 

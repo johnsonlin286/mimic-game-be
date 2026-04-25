@@ -90,6 +90,7 @@ declare global {
   }
 
   interface GameInitializePayload {
+    playerEmail?: string;
     roomId: string;
   }
 
