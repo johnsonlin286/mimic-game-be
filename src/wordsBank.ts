@@ -115,39 +115,31 @@ const wordsBankId = {
 }
 
 const returnWordsBank = (lang: string) => {
-  switch (lang) {
-    case "en":
-      return wordsBankEn;
-    case "id":
-      return wordsBankId;
-    default:
-      return wordsBankEn;
-  }
+  return lang === "id" ? wordsBankId : wordsBankEn;
 }
 
-const randomWordPair = (language: string, categoryId: string, usedWordPairs?: WordPair[]) => {
+const randomWordPair = (
+  language: string,
+  categoryId: string,
+  usedWordPairs: WordPair[] = [],
+): WordPair & { hasNoMoreWords: boolean } => {
   const wordsBank = returnWordsBank(language);
-  const selectedCategory = wordsBank[categoryId as keyof typeof wordsBank];
-  let wordsArray = selectedCategory.words;
-  if (usedWordPairs) {
-    // remove usedWordPairs from wordsBank array
-    wordsArray = wordsArray.filter(wordPair => !usedWordPairs.some(usedWordPair => usedWordPair.originalWord === wordPair.original && usedWordPair.mimicWord === wordPair.mimic));
-  }
-  console.log(usedWordPairs)
-  console.log(wordsArray)
-  let hasNoMoreWords = false;
-  if (wordsArray.length === 0) {
-    wordsArray = selectedCategory.words;
-    hasNoMoreWords = true;
-  }
-  const randomIndex = Math.floor(Math.random() * wordsArray.length);
-  const wordPair = wordsArray[randomIndex];
-  console.log("wordPair", wordPair);
+  const selectedCategory = wordsBank[categoryId as keyof typeof wordsBank] ?? wordsBank["food-drink"];
+  const allWords = selectedCategory.words;
+
+  // O(1) used-pair lookups via a Set instead of nested .some() per filter.
+  const usedKeys = new Set(usedWordPairs.map(p => `${p.originalWord}|${p.mimicWord}`));
+  const remaining = allWords.filter(w => !usedKeys.has(`${w.original}|${w.mimic}`));
+
+  const exhausted = remaining.length === 0;
+  const pool = exhausted ? allWords : remaining;
+  const wordPair = pool[Math.floor(Math.random() * pool.length)];
+
   return {
-    originalWord: wordPair?.original || '',
-    mimicWord: wordPair?.mimic || '',
-    hasNoMoreWords,
-  }
+    originalWord: wordPair?.original ?? "",
+    mimicWord: wordPair?.mimic ?? "",
+    hasNoMoreWords: exhausted,
+  };
 }
 
 export { returnWordsBank, randomWordPair };

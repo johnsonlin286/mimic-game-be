@@ -5,10 +5,35 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = registerRoomHandlers;
 const rooms_1 = __importDefault(require("../rooms"));
+const serializers_1 = require("./serializers");
+/** Returns true if `playerEmail` is currently in any room (optionally excluding one). */
+function emailExistsInAnyRoom(playerEmail, exceptRoomId) {
+    for (const room of rooms_1.default.values()) {
+        if (exceptRoomId && room.roomId === exceptRoomId)
+            continue;
+        if (room.roomPlayers.some(p => p.playerEmail === playerEmail))
+            return true;
+    }
+    return false;
+}
+/** Lobby threshold for moving between waiting/ready. */
+const MIN_PLAYERS_TO_START = 3;
+function syncLobbyStatus(room) {
+    if (room.gameRule.status === "playing")
+        return;
+    room.gameRule.status =
+        room.roomPlayers.length >= MIN_PLAYERS_TO_START ? "ready" : "waiting";
+}
 function registerRoomHandlers(io, socket) {
     const roomCreate = (payload) => {
-        console.log("Room create", payload);
-        const { creatorEmail, roomName, roomMaxPlayers, roomPin } = payload;
+        const { playerName, creatorEmail, roomMaxPlayers, isPublic } = payload;
+        if (!playerName) {
+            socket.emit("room-create-failed", {
+                success: false,
+                message: "Player name is required!",
+            });
+            return;
+        }
         if (!creatorEmail) {
             socket.emit("room-create-failed", {
                 success: false,
@@ -16,17 +41,10 @@ function registerRoomHandlers(io, socket) {
             });
             return;
         }
-        if (!roomName) {
+        if (emailExistsInAnyRoom(creatorEmail)) {
             socket.emit("room-create-failed", {
                 success: false,
-                message: "Room name is required!",
-            });
-            return;
-        }
-        else if (roomName.length < 3 || roomName.length > 20) {
-            socket.emit("room-create-failed", {
-                success: false,
-                message: "Room name must be between 3 and 20 characters!",
+                message: "Creator email already exists!",
             });
             return;
         }
@@ -37,64 +55,42 @@ function registerRoomHandlers(io, socket) {
             });
             return;
         }
-        else if (roomMaxPlayers < 3 || roomMaxPlayers > 10) {
+        if (roomMaxPlayers < 3 || roomMaxPlayers > 10) {
             socket.emit("room-create-failed", {
                 success: false,
                 message: "Room max players must be between 3 and 10!",
             });
             return;
         }
-        if (!roomPin) {
-            socket.emit("room-create-failed", {
-                success: false,
-                message: "Room pin is required!",
-            });
-            return;
-        }
-        else if (roomPin.length !== 4) {
-            socket.emit("room-create-failed", {
-                success: false,
-                message: "Room pin must be 4 characters!",
-            });
-            return;
-        }
-        const newName = `${payload.roomName}-${Date.now().toString()}`;
+        const reformedPlayerName = playerName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+        const roomId = `${reformedPlayerName}-${Date.now()}`;
+        const now = new Date();
         const roomData = {
-            creatorEmail: payload.creatorEmail,
-            roomDisplayName: payload.roomName,
-            roomId: newName,
-            roomMaxPlayers: payload.roomMaxPlayers,
-            roomPin: payload.roomPin,
+            creatorEmail,
+            roomId,
+            roomMaxPlayers,
             roomPlayers: [
-                { socketId: socket.id, playerEmail: payload.creatorEmail, role: "host" },
+                { socketId: socket.id, playerName, playerEmail: creatorEmail, role: "host" },
             ],
-            createdAt: new Date(),
-            updatedAt: new Date(),
+            gameRule: {
+                roles: { mimic: true, void: false },
+                category: "food-drink",
+                language: "en",
+                status: "waiting",
+            },
+            isPublic,
+            createdAt: now,
+            updatedAt: now,
         };
-        rooms_1.default.set(newName, roomData);
-        socket.join(newName);
+        rooms_1.default.set(roomId, roomData);
+        socket.join(roomId);
         socket.emit("room-created", {
             success: true,
             message: "Room created successfully",
-            data: {
-                room: {
-                    roomId: roomData.roomId,
-                    roomDisplayName: roomData.roomDisplayName,
-                    roomMaxPlayers: roomData.roomMaxPlayers,
-                    roomPlayers: roomData.roomPlayers,
-                    createdAt: roomData.createdAt,
-                    updatedAt: roomData.updatedAt,
-                },
-                player: {
-                    playerEmail: payload.creatorEmail,
-                    role: "host",
-                },
-            },
+            data: (0, serializers_1.roomBroadcast)(roomData),
         });
     };
     const roomJoin = (payload) => {
-        console.log("Room join", payload);
-        // TODO: validate payload
         const room = rooms_1.default.get(payload.roomId);
         if (!room) {
             socket.emit("room-join-failed", {
@@ -110,36 +106,35 @@ function registerRoomHandlers(io, socket) {
             });
             return;
         }
-        if (payload.roomPin !== room.roomPin) {
+        if (emailExistsInAnyRoom(payload.playerEmail)) {
             socket.emit("room-join-failed", {
                 success: false,
-                message: "Invalid room pin!",
+                message: "Player already in another room!",
             });
             return;
         }
-        room.roomPlayers.push({ socketId: socket.id, playerEmail: payload.playerEmail, role: "player" });
         socket.join(payload.roomId);
+        room.roomPlayers.push({
+            socketId: socket.id,
+            playerName: payload.playerName,
+            playerEmail: payload.playerEmail,
+            role: "player",
+        });
+        syncLobbyStatus(room);
+        room.updatedAt = new Date();
+        const data = (0, serializers_1.roomBroadcast)(room);
         socket.emit("room-join-success", {
             success: true,
             message: "Room joined successfully",
-            data: {
-                room: {
-                    roomId: room.roomId,
-                    roomDisplayName: room.roomDisplayName,
-                    roomMaxPlayers: room.roomMaxPlayers,
-                    roomPlayers: room.roomPlayers,
-                    createdAt: room.createdAt,
-                    updatedAt: room.updatedAt,
-                },
-                player: {
-                    playerEmail: payload.playerEmail,
-                    role: "player",
-                },
-            },
+            data,
+        });
+        io.to(payload.roomId).emit("listen-room-join-success", {
+            success: true,
+            message: `${payload.playerName} joined the room`,
+            data,
         });
     };
     const roomRejoin = (payload) => {
-        console.log("Room rejoin", payload);
         const room = rooms_1.default.get(payload.roomId);
         if (!room) {
             socket.emit("room-rejoin-not-found", {
@@ -148,7 +143,7 @@ function registerRoomHandlers(io, socket) {
             });
             return;
         }
-        const player = room.roomPlayers.find(player => player.playerEmail === payload.playerEmail);
+        const player = room.roomPlayers.find(p => p.playerEmail === payload.playerEmail);
         if (!player) {
             socket.emit("room-rejoin-not-found", {
                 success: false,
@@ -156,26 +151,61 @@ function registerRoomHandlers(io, socket) {
             });
             return;
         }
-        // update player socket id
-        player.socketId = payload.socketId;
+        // Reject only if the same email is registered in a *different* room. The
+        // previous implementation searched all rooms (including this one) and
+        // therefore always rejected — this is the bug fix.
+        if (emailExistsInAnyRoom(payload.playerEmail, payload.roomId)) {
+            socket.emit("room-rejoin-failed", {
+                success: false,
+                message: "Player already in another room!",
+            });
+            return;
+        }
         socket.join(payload.roomId);
+        player.socketId = payload.socketId;
+        room.updatedAt = new Date();
         io.to(payload.roomId).emit("room-rejoin-success", {
             success: true,
             message: "Room rejoined successfully",
-            data: {
-                room: {
-                    roomId: room.roomId,
-                    roomDisplayName: room.roomDisplayName,
-                    roomMaxPlayers: room.roomMaxPlayers,
-                    roomPlayers: room.roomPlayers,
-                    createdAt: room.createdAt,
-                    updatedAt: room.updatedAt,
-                },
-            },
+            data: (0, serializers_1.roomBroadcast)(room),
         });
     };
+    const roomKick = (payload) => {
+        const room = rooms_1.default.get(payload.roomId);
+        if (!room) {
+            socket.emit("room-kick-failed", {
+                success: false,
+                message: "Room not found",
+            });
+            return;
+        }
+        const player = room.roomPlayers.find(p => p.socketId === payload.socketId);
+        if (!player) {
+            socket.emit("room-kick-failed", {
+                success: false,
+                message: "Player not found",
+            });
+            return;
+        }
+        io.in(payload.socketId).socketsLeave(payload.roomId);
+        room.roomPlayers = room.roomPlayers.filter(p => p.socketId !== payload.socketId);
+        syncLobbyStatus(room);
+        room.updatedAt = new Date();
+        io.to(payload.socketId).emit("listen-room-kicked-player", {
+            success: true,
+            message: "You have been kicked from the room",
+            data: { playerEmail: player.playerEmail },
+        });
+        io.to(payload.roomId).emit("listen-room-kick-player", {
+            success: true,
+            message: `${player.playerEmail} has been kicked from the room`,
+            data: { room: (0, serializers_1.roomBroadcast)(room) },
+        });
+        if (room.roomPlayers.length === 0) {
+            rooms_1.default.delete(payload.roomId);
+        }
+    };
     const roomLeave = (payload) => {
-        console.log("Room leave", payload);
         const room = rooms_1.default.get(payload.roomId);
         if (!room) {
             socket.emit("room-leave-not-found", {
@@ -184,7 +214,7 @@ function registerRoomHandlers(io, socket) {
             });
             return;
         }
-        const player = room.roomPlayers.find(player => player.playerEmail === payload.playerEmail);
+        const player = room.roomPlayers.find(p => p.socketId === payload.socketId);
         if (!player) {
             socket.emit("room-leave-not-found", {
                 success: false,
@@ -193,90 +223,29 @@ function registerRoomHandlers(io, socket) {
             return;
         }
         if (player.role === "host") {
-            console.log("Host left the room, kicking all players", payload.roomId);
-            // kick all players
-            room.roomPlayers.forEach(player => {
-                const kickPayload = {
-                    roomId: payload.roomId,
-                    socketId: player.socketId,
-                    playerEmail: player.playerEmail,
-                };
-                roomKick(kickPayload);
-            });
+            // Snapshot the players because roomKick mutates roomPlayers via
+            // .filter() — iterating the live array would skip entries.
+            const playersSnapshot = [...room.roomPlayers];
+            for (const p of playersSnapshot) {
+                roomKick({ roomId: payload.roomId, socketId: p.socketId });
+            }
         }
         else {
-            console.log("Room leave player");
-            room.roomPlayers = room.roomPlayers.filter(player => player.playerEmail !== payload.playerEmail);
             socket.leave(payload.roomId);
+            room.roomPlayers = room.roomPlayers.filter(p => p.socketId !== payload.socketId);
+            syncLobbyStatus(room);
+            room.updatedAt = new Date();
             io.to(payload.roomId).emit("listen-room-leave-success", {
                 success: true,
                 message: `${player.playerEmail} left the room`,
-                data: {
-                    player: {
-                        playerEmail: payload.playerEmail,
-                        role: player.role,
-                    },
-                    room: {
-                        roomId: room.roomId,
-                        roomDisplayName: room.roomDisplayName,
-                        roomMaxPlayers: room.roomMaxPlayers,
-                        roomPlayers: room.roomPlayers,
-                        createdAt: room.createdAt,
-                        updatedAt: room.updatedAt,
-                    },
-                },
+                data: (0, serializers_1.roomBroadcast)(room),
             });
         }
         socket.emit("room-leave-success", {
             success: true,
             message: `${player.playerEmail} left the room`,
         });
-        // check room players count, if it's 0, dismiss the room
-        if (room.roomPlayers.length === 0) {
-            rooms_1.default.delete(payload.roomId);
-        }
-    };
-    const roomKick = (payload) => {
-        console.log("Room kick", payload);
-        const room = rooms_1.default.get(payload.roomId);
-        if (!room) {
-            socket.emit("room-kick-not-found", {
-                success: false,
-                message: "Room not found",
-            });
-            return;
-        }
-        const player = room.roomPlayers.find(player => player.playerEmail === payload.playerEmail);
-        if (!player) {
-            socket.emit("room-kick-not-found", {
-                success: false,
-                message: "Player not found",
-            });
-            return;
-        }
-        room.roomPlayers = room.roomPlayers.filter(player => player.playerEmail !== payload.playerEmail);
-        io.in(payload.socketId).socketsLeave(payload.roomId);
-        io.to(payload.socketId).emit("listen-room-kicked-player", {
-            success: true,
-            message: "You have been kicked from the room",
-            data: {
-                playerEmail: payload.playerEmail,
-            }
-        });
-        io.to(payload.roomId).emit("listen-room-kick-player", {
-            success: true,
-            message: `${payload.playerEmail} has been kicked from the room`,
-            data: {
-                room: {
-                    roomId: room.roomId,
-                    roomDisplayName: room.roomDisplayName,
-                    roomMaxPlayers: room.roomMaxPlayers,
-                    roomPlayers: room.roomPlayers,
-                },
-            }
-        });
-        // check room players count, if it's 0, dismiss the room
-        if (room.roomPlayers.length === 0) {
+        if (rooms_1.default.has(payload.roomId) && room.roomPlayers.length === 0) {
             rooms_1.default.delete(payload.roomId);
         }
     };

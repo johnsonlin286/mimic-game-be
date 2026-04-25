@@ -1,6 +1,10 @@
 export {};
 
 declare global {
+  type RoomRole = "host" | "player";
+  type GameRole = "mimic" | "void" | "original";
+  type GameStatus = "waiting" | "ready" | "playing" | "finished";
+
   interface CreateRoomPayload {
     playerName: string;
     creatorEmail: string;
@@ -30,7 +34,7 @@ declare global {
     socketId: string;
     playerName: string;
     playerEmail: string;
-    role: string;
+    role: RoomRole;
   }
 
   interface GameRule {
@@ -40,7 +44,7 @@ declare global {
     }
     category: string;
     language: string;
-    status: "waiting" | "ready" | "playing" | "finished";
+    status: GameStatus;
   }
 
   interface WordPair {
@@ -48,14 +52,18 @@ declare global {
     mimicWord: string;
   }
 
-  interface PlayerWithRole {
+  /** The minimal voter identity we expose alongside vote tallies. */
+  interface PlayerSummary {
     socketId: string;
     playerName: string;
     playerEmail: string;
-    gameRole: string;
-    gameWord?: string | null;
+  }
+
+  interface PlayerWithRole extends PlayerSummary {
+    gameRole: GameRole;
+    gameWord: string | null;
     hasVoted: boolean;
-    voters: Partial<PlayerWithRole>[];
+    voters: PlayerSummary[];
     isAlive: boolean;
   }
 

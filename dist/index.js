@@ -10,6 +10,8 @@ const socket_io_1 = require("socket.io");
 const http_1 = require("http");
 const rooms_1 = __importDefault(require("./routes/rooms"));
 const rooms_2 = __importDefault(require("./sockets/rooms"));
+const utils_1 = __importDefault(require("./sockets/utils"));
+const game_1 = __importDefault(require("./sockets/game"));
 const roomGarbageCollector_1 = require("./roomGarbageCollector");
 dotenv_1.default.config({
     quiet: true,
@@ -35,76 +37,13 @@ app.use("/api/rooms", rooms_1.default);
 const onConnection = (socket) => {
     console.log("A user connected");
     (0, rooms_2.default)(io, socket);
+    (0, utils_1.default)(io, socket);
+    (0, game_1.default)(io, socket);
     socket.on("disconnect", () => {
         console.log("A user disconnected");
     });
 };
 io.on("connection", onConnection);
-/*
-io.on("connection", (socket) => {
-  console.log("A user connected");
-  socket.on("disconnect", () => {
-    console.log("A user disconnected");
-  });
-
-  socket.on("room-create", (payload) => {
-    console.log("Room create", payload);
-    // TODO: validate payload
-    const newName = `${payload.roomName}-${Date.now().toString()}`;
-    const roomData: RoomData = {
-      creatorEmail: payload.creatorEmail,
-      roomDisplayName: payload.roomName,
-      roomId: newName,
-      roomMaxPlayers: payload.roomMaxPlayers,
-      roomPin: payload.roomPin,
-      roomPlayers: [
-        { playerEmail: payload.creatorEmail },
-      ],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    rooms.set(newName, roomData);
-    socket.join(newName)
-    
-    socket.emit("room-created", {
-      success: true,
-      message: "Room created successfully",
-      data: {
-        roomDisplayName: roomData.roomDisplayName,
-        roomId: roomData.roomId,
-      },
-    });
-  });
-
-  socket.on("room-join", (payload) => {
-    console.log("Room join", payload);
-    // TODO: validate payload
-    const room = rooms.get(payload.roomId);
-    if (!room) {
-      socket.emit("room-join-not-found", {
-        success: false,
-        message: "Room not found",
-      });
-      return;
-    }
-    room.roomPlayers.push({ playerEmail: payload.playerEmail });
-    socket.join(payload.roomId);
-    socket.emit("room-join-success", {
-      success: true,
-      message: "Room joined successfully",
-      data: {
-        roomDisplayName: room.roomDisplayName,
-        roomId: room.roomId,
-      },
-    });
-  })
-
-  socket.on("test-emit", (payload) => {
-    console.log("Test emit", payload);
-    socket.to(payload.roomId).emit("test-emit-response", { ...payload })
-  })
-});
-*/
 server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
     (0, roomGarbageCollector_1.startRoomGarbageCollector)(io);

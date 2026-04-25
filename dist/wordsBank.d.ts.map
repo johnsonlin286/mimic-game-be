@@ -1,0 +1,1 @@
+{"version":3,"file":"wordsBank.d.ts","sourceRoot":"","sources":["../src/wordsBank.ts"],"names":[],"mappings":"AAoHA,QAAA,MAAM,eAAe,GAAI,MAAM,MAAM;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;CAEpC,CAAA;AAED,QAAA,MAAM,cAAc,GAClB,UAAU,MAAM,EAChB,YAAY,MAAM,EAClB,gBAAe,QAAQ,EAAO,KAC7B,QAAQ,GAAG;IAAE,cAAc,EAAE,OAAO,CAAA;CAkBtC,CAAA;AAED,OAAO,EAAE,eAAe,EAAE,cAAc,EAAE,CAAC"}

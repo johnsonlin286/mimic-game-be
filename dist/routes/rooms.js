@@ -9,10 +9,15 @@ const router = (0, express_1.Router)();
 router.get("/all", (req, res) => {
     const roomData = Array.from(rooms_1.default.values()).map(room => ({
         creatorEmail: room.creatorEmail,
-        roomDisplayName: room.roomDisplayName,
         roomId: room.roomId,
         roomMaxPlayers: room.roomMaxPlayers,
         roomPlayers: room.roomPlayers,
+        gameRule: {
+            gameStatus: room.gameRule.status,
+            category: room.gameRule.category,
+            language: room.gameRule.language,
+        },
+        isPublic: room.isPublic,
         createdAt: room.createdAt,
         updatedAt: room.updatedAt,
     }));
