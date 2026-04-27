@@ -66,6 +66,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
     const now = new Date();
     const roomData: RoomData = {
       creatorEmail,
+      creatorName: playerName,
       roomId,
       roomMaxPlayers,
       roomPlayers: [
