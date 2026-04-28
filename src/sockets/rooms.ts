@@ -134,7 +134,13 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
     io.to(payload.roomId).emit("listen-room-join-success", {
       success: true,
       message: `${payload.playerName} joined the room`,
-      data,
+      data: {
+        player: {
+          playerName: payload.playerName,
+          playerEmail: payload.playerEmail,
+        },
+        room: data,
+      },
     });
   };
 
@@ -172,10 +178,16 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
     player.socketId = payload.socketId;
     room.updatedAt = new Date();
 
-    io.to(payload.roomId).emit("room-rejoin-success", {
+    socket.emit("room-rejoin-success", {
       success: true,
       message: "Room rejoined successfully",
-      data: roomBroadcast(room),
+      data: {
+        player: {
+          playerName: player.playerName,
+          playerEmail: player.playerEmail,
+        },
+        room: roomBroadcast(room),
+      },
     });
   };
 
@@ -209,7 +221,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
     });
     io.to(payload.roomId).emit("listen-room-kick-player", {
       success: true,
-      message: `${player.playerEmail} has been kicked from the room`,
+      message: `${player.playerName} has been kicked from the room`,
       data: { room: roomBroadcast(room) },
     });
 
@@ -252,14 +264,20 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       io.to(payload.roomId).emit("listen-room-leave-success", {
         success: true,
         message: `${player.playerEmail} left the room`,
-        data: roomBroadcast(room),
+        data: {
+          player: {
+            playerName: player.playerName,
+            playerEmail: player.playerEmail,
+          },
+          room: roomBroadcast(room),
+        },
+      });
+      
+      socket.emit("room-leave-success", {
+        success: true,
+        message: `${player.playerEmail} left the room`,
       });
     }
-
-    socket.emit("room-leave-success", {
-      success: true,
-      message: `${player.playerEmail} left the room`,
-    });
 
     if (rooms.has(payload.roomId) && room.roomPlayers.length === 0) {
       rooms.delete(payload.roomId);
