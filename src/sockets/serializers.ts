@@ -36,10 +36,11 @@ export function maskedPlayer(player: PlayerWithRole) {
 
 /**
  * Broadcast view of a room used by `rooms.ts` events. Omits `creatorEmail`
- * and the entire `gameData` (rooms-channel events are pre-game / lobby state).
+ * (PII) but exposes `creatorName` so the lobby UI can label the host.
  */
 export function roomBroadcast(room: RoomData) {
   return {
+    creatorName: room.creatorName,
     roomId: room.roomId,
     roomMaxPlayers: room.roomMaxPlayers,
     roomPlayers: room.roomPlayers,

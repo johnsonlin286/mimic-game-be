@@ -41,7 +41,7 @@ app.use("/api/rooms", roomRoutes);
 
 const onConnection = (socket: Socket) => {
   console.log("A user connected");
-  
+
   registerRoomHandlers(io, socket);
   registerUtilsHandlers(io, socket);
   registerGameHandlers(io, socket);

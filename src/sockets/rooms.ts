@@ -61,8 +61,8 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       return;
     }
 
-    const reformedPlayerName = playerName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-    const roomId = `${reformedPlayerName}-${Date.now()}`;
+    const randomCode = Math.random().toString(36).substring(2, 6).toLowerCase();
+    const roomId = `${randomCode}`;
     const now = new Date();
     const roomData: RoomData = {
       creatorEmail,
@@ -107,6 +107,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       });
       return;
     }
+
     if (emailExistsInAnyRoom(payload.playerEmail)) {
       socket.emit("room-join-failed", {
         success: false,
@@ -125,22 +126,22 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
     syncLobbyStatus(room);
     room.updatedAt = new Date();
 
-    const data = roomBroadcast(room);
+    const responseData = {
+      player: {
+        playerName: payload.playerName,
+        playerEmail: payload.playerEmail,
+      },
+      room: roomBroadcast(room),
+    };
     socket.emit("room-join-success", {
       success: true,
       message: "Room joined successfully",
-      data,
+      data: responseData,
     });
     io.to(payload.roomId).emit("listen-room-join-success", {
       success: true,
       message: `${payload.playerName} joined the room`,
-      data: {
-        player: {
-          playerName: payload.playerName,
-          playerEmail: payload.playerEmail,
-        },
-        room: data,
-      },
+      data: responseData,
     });
   };
 
@@ -163,9 +164,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       return;
     }
 
-    // Reject only if the same email is registered in a *different* room. The
-    // previous implementation searched all rooms (including this one) and
-    // therefore always rejected — this is the bug fix.
+    // Reject if this email is registered in a different room.
     if (emailExistsInAnyRoom(payload.playerEmail, payload.roomId)) {
       socket.emit("room-rejoin-failed", {
         success: false,
@@ -284,9 +283,22 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
     }
   };
 
+  /**
+   * When a socket drops, run the full roomLeave logic for every room it was
+   * in. We use `disconnecting` (not `disconnect`) because `socket.rooms` is
+   * still populated at that point, so we only touch the relevant rooms.
+   */
+  const handleDisconnecting = () => {
+    for (const roomId of socket.rooms) {
+      if (roomId === socket.id) continue;
+      roomLeave({ roomId, socketId: socket.id });
+    }
+  };
+
   socket.on("room:create", roomCreate);
   socket.on("room:join", roomJoin);
   socket.on("room:rejoin", roomRejoin);
   socket.on("room:leave", roomLeave);
   socket.on("room:kick", roomKick);
+  socket.on("disconnecting", handleDisconnecting);
 }
