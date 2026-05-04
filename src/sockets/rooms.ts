@@ -73,7 +73,8 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
         { socketId: socket.id, playerName, playerEmail: creatorEmail, role: "host" },
       ],
       gameRule: {
-        roles: { mimic: true, void: false },
+        roles: { minority: true, blind: false },
+        superpowers: false,
         category: "food-drink",
         language: "en",
         status: "waiting",

@@ -3,55 +3,55 @@ const wordsBankEn = {
     "id": "food-drink",
     "label": "Food & Drink",
     "words": [
-      { "original": "Pancake", "mimic": "Waffle" },
-      { "original": "Ice Cream", "mimic": "Gelato" },
-      { "original": "Coffee", "mimic": "Tea" },
-      { "original": "Burger", "mimic": "Sandwich" },
-      { "original": "Sushi", "mimic": "Sashimi" }
+      { "primary": "Pancake", "secondary": "Waffle" },
+      { "primary": "Ice Cream", "secondary": "Gelato" },
+      { "primary": "Coffee", "secondary": "Tea" },
+      { "primary": "Burger", "secondary": "Sandwich" },
+      { "primary": "Sushi", "secondary": "Sashimi" }
     ]
   },
   "animals": {
     "id": "animals",
     "label": "Animals",
     "words": [
-      { "original": "Alligator", "mimic": "Crocodile" },
-      { "original": "Frog", "mimic": "Toad" },
-      { "original": "Rabbit", "mimic": "Hare" },
-      { "original": "Dolphin", "mimic": "Whale" },
-      { "original": "Bee", "mimic": "Wasp" }
+      { "primary": "Alligator", "secondary": "Crocodile" },
+      { "primary": "Frog", "secondary": "Toad" },
+      { "primary": "Rabbit", "secondary": "Hare" },
+      { "primary": "Dolphin", "secondary": "Whale" },
+      { "primary": "Bee", "secondary": "Wasp" }
     ]
   },
   "movies": {
     "id": "movies",
     "label": "Movies",
     "words": [
-      { "original": "Horror", "mimic": "Thriller" },
-      { "original": "Director", "mimic": "Producer" },
-      { "original": "Prequel", "mimic": "Sequel" },
-      { "original": "Blockbuster", "mimic": "Indie" },
-      { "original": "Actor", "mimic": "Extra" }
+      { "primary": "Horror", "secondary": "Thriller" },
+      { "primary": "Director", "secondary": "Producer" },
+      { "primary": "Prequel", "secondary": "Sequel" },
+      { "primary": "Blockbuster", "secondary": "Indie" },
+      { "primary": "Actor", "secondary": "Extra" }
     ]
   },
   "places": {
     "id": "places",
     "label": "Places",
     "words": [
-      { "original": "Hospital", "mimic": "Clinic" },
-      { "original": "Hotel", "mimic": "Motel" },
-      { "original": "Ocean", "mimic": "Lake" },
-      { "original": "Supermarket", "mimic": "Grocery" },
-      { "original": "Mountain", "mimic": "Hill" }
+      { "primary": "Hospital", "secondary": "Clinic" },
+      { "primary": "Hotel", "secondary": "Motel" },
+      { "primary": "Ocean", "secondary": "Lake" },
+      { "primary": "Supermarket", "secondary": "Grocery" },
+      { "primary": "Mountain", "secondary": "Hill" }
     ]
   },
   "technology": {
     "id": "technology",
     "label": "Technology",
     "words": [
-      { "original": "Laptop", "mimic": "Desktop" },
-      { "original": "Wi-Fi", "mimic": "Bluetooth" },
-      { "original": "Robot", "mimic": "Cyborg" },
-      { "original": "Headphones", "mimic": "Earbuds" },
-      { "original": "Email", "mimic": "Text Message" }
+      { "primary": "Laptop", "secondary": "Desktop" },
+      { "primary": "Wi-Fi", "secondary": "Bluetooth" },
+      { "primary": "Robot", "secondary": "Cyborg" },
+      { "primary": "Headphones", "secondary": "Earbuds" },
+      { "primary": "Email", "secondary": "Text Message" }
     ]
   }
 }
@@ -61,61 +61,66 @@ const wordsBankId = {
     "id": "food-drink",
     "label": "Makanan & Minuman",
     "words": [
-      { "original": "Mie", "mimic": "Bihun" },
-      { "original": "Kari", "mimic": "Gulai" },
-      { "original": "Soto", "mimic": "Sop" },
-      { "original": "Es Krim", "mimic": "Gelato" },
-      { "original": "Kopi", "mimic": "Teh" }
+      { "primary": "Mie", "secondary": "Bihun" },
+      { "primary": "Kari", "secondary": "Gulai" },
+      { "primary": "Soto", "secondary": "Sop" },
+      { "primary": "Es Krim", "secondary": "Gelato" },
+      { "primary": "Kopi", "secondary": "Teh" }
     ]
   },
   "animals": {
     "id": "animals",
     "label": "Hewan",
     "words": [
-      { "original": "Penyu", "mimic": "Kura-kura" },
-      { "original": "Buaya", "mimic": "Biawak" },
-      { "original": "Kelinci", "mimic": "Marmut" },
-      { "original": "Lumba-lumba", "mimic": "Paus" },
-      { "original": "Lebah", "mimic": "Tawon" }
+      { "primary": "Penyu", "secondary": "Kura-kura" },
+      { "primary": "Buaya", "secondary": "Biawak" },
+      { "primary": "Kelinci", "secondary": "Marmut" },
+      { "primary": "Lumba-lumba", "secondary": "Paus" },
+      { "primary": "Lebah", "secondary": "Tawon" }
     ]
   },
   "movies": {
     "id": "movies",
     "label": "Film",
     "words": [
-      { "original": "Animasi", "mimic": "Kartun" },
-      { "original": "Naskah", "mimic": "Skenario" },
-      { "original": "Aktor", "mimic": "Figuran" },
-      { "original": "Komedi", "mimic": "Romantis" },
-      { "original": "Bioskop", "mimic": "Teater" }
+      { "primary": "Animasi", "secondary": "Kartun" },
+      { "primary": "Naskah", "secondary": "Skenario" },
+      { "primary": "Aktor", "secondary": "Figuran" },
+      { "primary": "Komedi", "secondary": "Romantis" },
+      { "primary": "Bioskop", "secondary": "Teater" }
     ]
   },
   "places": {
     "id": "places",
     "label": "Tempat",
     "words": [
-      { "original": "Restoran", "mimic": "Kafe" },
-      { "original": "Rumah Sakit", "mimic": "Klinik" },
-      { "original": "Hotel", "mimic": "Villa" },
-      { "original": "Laut", "mimic": "Danau" },
-      { "original": "Gunung", "mimic": "Bukit" }
+      { "primary": "Restoran", "secondary": "Kafe" },
+      { "primary": "Rumah Sakit", "secondary": "Klinik" },
+      { "primary": "Hotel", "secondary": "Villa" },
+      { "primary": "Laut", "secondary": "Danau" },
+      { "primary": "Gunung", "secondary": "Bukit" }
     ]
   },
   "technology": {
     "id": "technology",
     "label": "Teknologi",
     "words": [
-      { "original": "Flashdisk", "mimic": "Hardisk" },
-      { "original": "Baterai", "mimic": "Powerbank" },
-      { "original": "Televisi", "mimic": "Proyektor" },
-      { "original": "Laptop", "mimic": "Komputer PC" },
-      { "original": "Wi-Fi", "mimic": "Bluetooth" }
+      { "primary": "Flashdisk", "secondary": "Hardisk" },
+      { "primary": "Baterai", "secondary": "Powerbank" },
+      { "primary": "Televisi", "secondary": "Proyektor" },
+      { "primary": "Laptop", "secondary": "Komputer PC" },
+      { "primary": "Wi-Fi", "secondary": "Bluetooth" }
     ]
   }
 }
 
 const returnWordsBank = (lang: string) => {
   return lang === "id" ? wordsBankId : wordsBankEn;
+}
+
+/** Canonical key so a pair matches regardless of majority/minority or primary/secondary order. */
+function canonicalPairKey(a: string, b: string): string {
+  return a <= b ? `${a}\0${b}` : `${b}\0${a}`;
 }
 
 const randomWordPair = (
@@ -127,17 +132,25 @@ const randomWordPair = (
   const selectedCategory = wordsBank[categoryId as keyof typeof wordsBank] ?? wordsBank["food-drink"];
   const allWords = selectedCategory.words;
 
-  // O(1) used-pair lookups via a Set instead of nested .some() per filter.
-  const usedKeys = new Set(usedWordPairs.map(p => `${p.originalWord}|${p.mimicWord}`));
-  const remaining = allWords.filter(w => !usedKeys.has(`${w.original}|${w.mimic}`));
+  const usedKeys = new Set(
+    usedWordPairs.map(p => canonicalPairKey(p.majorityWord, p.minorityWord)),
+  );
+  const remaining = allWords.filter(
+    w => !usedKeys.has(canonicalPairKey(w.primary, w.secondary)),
+  );
 
   const exhausted = remaining.length === 0;
   const pool = exhausted ? allWords : remaining;
   const wordPair = pool[Math.floor(Math.random() * pool.length)];
+  const primary = wordPair?.primary ?? "";
+  const secondary = wordPair?.secondary ?? "";
+  // 50% swap: which bank word maps to majority vs minority is random each draw.
+  const [majorityWord, minorityWord] =
+    Math.random() < 0.5 ? [primary, secondary] : [secondary, primary];
 
   return {
-    originalWord: wordPair?.original ?? "",
-    mimicWord: wordPair?.mimic ?? "",
+    majorityWord,
+    minorityWord,
     hasNoMoreWords: exhausted,
   };
 }

@@ -1,8 +1,8 @@
 import { Server, Socket } from "socket.io";
 
-import rooms from "../rooms";
-import { calculateRoles, fisherYatesShuffle } from "../algorithmScript";
+import { calculateRoles, calculateSuperpowers, roleFisherYatesShuffle } from "../algorithmScript";
 import { randomWordPair } from "../wordsBank";
+import { assignSuperpowersForRound } from "../superpowers";
 import calculateVoteResults from "../voteScript";
 import { gameBroadcast } from "./serializers";
 import {
@@ -12,11 +12,12 @@ import {
   requireGameStatus,
   requireHost,
 } from "./guards";
+import { AGENT } from "../superpowers";
 
 /** Returns the word a player should see for the chosen role. */
 function wordForRole(role: GameRole, pair: WordPair): string | null {
-  if (role === "mimic") return pair.mimicWord;
-  if (role === "original") return pair.originalWord;
+  if (role === "minority") return pair.minorityWord;
+  if (role === "majority") return pair.majorityWord;
   return null;
 }
 
@@ -96,16 +97,16 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       if (!requireHost(socket, player, "game-initialize-failed")) return;
     }
 
-    const { numMimics, numVoids, numOriginals } = calculateRoles(
+    const { numMinorities, numBlinds, numMajorities } = calculateRoles(
       room.roomPlayers.length,
-      room.gameRule.roles.void,
+      room.gameRule.roles.blind,
     );
     const roleDeck: GameRole[] = [
-      ...Array<GameRole>(numMimics).fill("mimic"),
-      ...Array<GameRole>(numVoids).fill("void"),
-      ...Array<GameRole>(numOriginals).fill("original"),
+      ...Array<GameRole>(numMinorities).fill("minority"),
+      ...Array<GameRole>(numBlinds).fill("blind"),
+      ...Array<GameRole>(numMajorities).fill("majority"),
     ];
-    const shuffledRoleDeck = fisherYatesShuffle(roleDeck);
+    const shuffledRoleDeck = roleFisherYatesShuffle(roleDeck);
 
     const previousPairs = room.gameData?.wordPairList ?? [];
     const newWordPair = randomWordPair(
@@ -115,18 +116,28 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     );
 
     const playersWithRoles: PlayerWithRole[] = room.roomPlayers.map((p, i) => {
-      const role = shuffledRoleDeck[i] ?? "original";
+      const role = shuffledRoleDeck[i] ?? "majority";
       return {
         socketId: p.socketId,
         playerName: p.playerName,
         playerEmail: p.playerEmail,
         gameRole: role,
         gameWord: wordForRole(role, newWordPair),
+        superpower: null,
+        hasUsedSuperpower: undefined,
         hasVoted: false,
         voters: [],
         isAlive: true,
       };
     });
+
+    if (room.gameRule.superpowers) {  
+      const { numActivePowers, numPassivePowers } = calculateSuperpowers(
+        room.roomPlayers.length,
+        room.gameRule.superpowers,
+      );
+      assignSuperpowersForRound(playersWithRoles, numActivePowers, numPassivePowers);
+    }
 
     // When the category is exhausted we restart with just the latest pair
     // instead of accumulating duplicates indefinitely.
@@ -155,6 +166,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
         data: {
           gameRole: gamePlayer?.gameRole ?? null,
           gameWord: gamePlayer?.gameWord ?? null,
+          superpower: gamePlayer?.superpower ?? null,
         },
       });
     }
@@ -268,23 +280,23 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
 
     // Announce the round outcome. The "Void guess the word" branch also
     // notifies the void privately so they can submit a guess.
-    if (results.message === "Void guess the word") {
-      const voidPlayer = room.gameData.players.find(p => p.gameRole === "void");
-      if (!voidPlayer) {
+    if (results.message === "Blind guess the word") {
+      const blindPlayer = room.gameData.players.find(p => p.gameRole === "blind");
+      if (!blindPlayer) {
         io.to(payload.roomId).emit("game-calculate-results-failed", {
           success: false,
-          message: "Void player not found",
+          message: "Blind player not found",
         });
         return;
       }
-      io.to(voidPlayer.socketId).emit("listen-game-void-got-caught", {
+      io.to(blindPlayer.socketId).emit("listen-game-blind-got-caught", {
         success: true,
-        message: "Void guessed the word",
+        message: "Blind guessed the word",
       });
     }
 
     const message =
-      results.message === "Void guess the word" ? "Void got caught!" :
+      results.message === "Blind guess the word" ? "Blind got caught!" :
       results.message === "Game continue" ? "Game continue" :
       results.message;
 
@@ -300,25 +312,25 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
   };
 
   const gameVoidGuessTheWord = (payload: GameVoidGuessTheWordPayload) => {
-    const room = findRoom(socket, payload.roomId, "game-void-guess-the-word-failed");
+    const room = findRoom(socket, payload.roomId, "game-blind-guess-the-word-failed");
     if (!room) return;
 
-    const player = findGamePlayer(socket, room, payload.playerEmail, "game-void-guess-the-word-failed");
+    const player = findGamePlayer(socket, room, payload.playerEmail, "game-blind-guess-the-word-failed");
     if (!player) return;
 
-    if (player.gameRole !== "void") {
-      socket.emit("game-void-guess-the-word-failed", {
+    if (player.gameRole !== "blind") {
+      socket.emit("game-blind-guess-the-word-failed", {
         success: false,
-        message: "Player is not the void",
+        message: "Player is not the blind",
       });
       return;
     }
 
-    const targetWord = room.gameData?.wordPairList[0]?.originalWord ?? "";
+    const targetWord = room.gameData?.wordPairList[0]?.majorityWord ?? "";
     if (targetWord.toLowerCase() === payload.guessWord.toLowerCase()) {
-      io.to(payload.roomId).emit("listen-game-void-guess-the-word-correctly", {
+      io.to(payload.roomId).emit("listen-game-blind-guess-the-word-correctly", {
         success: true,
-        message: "Void guessed the word correctly",
+        message: "Blind guessed the word correctly",
       });
       return;
     }
@@ -333,26 +345,26 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     };
     room.updatedAt = new Date();
 
-    let originalCount = 0;
-    let mimicCount = 0;
-    let voidCount = 0;
+    let majorityCount = 0;
+    let minorityCount = 0;
+    let blindCount = 0;
     for (const p of updatedPlayers) {
       if (!p.isAlive) continue;
-      if (p.gameRole === "original") originalCount++;
-      else if (p.gameRole === "mimic") mimicCount++;
-      else if (p.gameRole === "void") voidCount++;
+      if (p.gameRole === "majority") majorityCount++;
+      else if (p.gameRole === "minority") minorityCount++;
+      else if (p.gameRole === "blind") blindCount++;
     }
 
     let outcomeMessage = "Game continue";
-    if (mimicCount === 0 && voidCount === 0) {
-      outcomeMessage = "Original is the winner";
-    } else if (originalCount === 0) {
-      outcomeMessage = voidCount > 0 ? "Void is the winner" : "Mimic is the winner";
-    } else if (originalCount <= mimicCount + voidCount) {
-      outcomeMessage = mimicCount > 0 ? "Mimic is the winner" : "Void is the winner";
+    if (minorityCount === 0 && blindCount === 0) {
+      outcomeMessage = "Majority is the winner";
+    } else if (majorityCount === 0) {
+      outcomeMessage = blindCount > 0 ? "Blind is the winner" : "Minority is the winner";
+    } else if (majorityCount <= minorityCount + blindCount) {
+      outcomeMessage = minorityCount > 0 ? "Minority is the winner" : "Blind is the winner";
     }
 
-    io.to(payload.roomId).emit("listen-game-void-guess-the-word-incorrectly", {
+    io.to(payload.roomId).emit("listen-game-blind-guess-the-word-incorrectly", {
       success: true,
       message: "Void guessed the word incorrectly",
       data: {
@@ -384,6 +396,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
             ...p,
             gameRole: null,
             gameWord: null,
+            superpower: AGENT,
           })),
         },
       },

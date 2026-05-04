@@ -36,9 +36,9 @@ export default function calculateVoteResults(players: PlayerWithRole[]) {
   }
 
   // Mark only the voted-out player as dead (keep them in the list) and count alive roles.
-  let originalCount = 0;
-  let mimicCount = 0;
-  let voidCount = 0;
+  let majorityCount = 0;
+  let minorityCount = 0;
+  let blindCount = 0;
 
   const newPlayers: PlayerWithRole[] = new Array(players.length);
   for (let i = 0; i < players.length; i += 1) {
@@ -48,34 +48,34 @@ export default function calculateVoteResults(players: PlayerWithRole[]) {
     newPlayers[i] = next;
 
     if (!next.isAlive) continue;
-    if (next.gameRole === "original") originalCount += 1;
-    else if (next.gameRole === "mimic") mimicCount += 1;
-    else if (next.gameRole === "void") voidCount += 1;
+    if (next.gameRole === "majority") majorityCount += 1;
+    else if (next.gameRole === "minority") minorityCount += 1;
+    else if (next.gameRole === "blind") blindCount += 1;
   }
 
-  // Original wins only when all mimics AND voids are eliminated.
-  if (mimicCount === 0 && voidCount === 0) {
+  // Majority wins only when all minorities AND blinds are eliminated.
+  if (minorityCount === 0 && blindCount === 0) {
     return {
       success: true,
-      message: "Original is the winner",
+      message: "Majority is the winner",
       data: { players: newPlayers },
     };
   }
 
-  // If a void is voted out, game continues (void-specific flow happens elsewhere).
-  if (topRole === "void") {
+  // If a blind is voted out, game continues (blind-specific flow happens elsewhere).
+  if (topRole === "blind") {
     return {
       success: true,
-      message: "Void guess the word",
+      message: "Blind guess the word",
       data: { players: newPlayers },
     };
   }
 
-  // Opposition wins once they are >= originals.
-  if (originalCount <= mimicCount + voidCount) {
+  // Opposition wins once they are >= minorities.
+  if (majorityCount <= minorityCount + blindCount) {
     return {
       success: true,
-      message: mimicCount > 0 ? "Mimic is the winner" : "Void is the winner",
+      message: minorityCount > 0 ? "Minority is the winner" : "Blind is the winner",
       data: { players: newPlayers },
     };
   }

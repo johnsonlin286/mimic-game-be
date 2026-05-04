@@ -2,7 +2,15 @@ export {};
 
 declare global {
   type RoomRole = "host" | "player";
-  type GameRole = "mimic" | "void" | "original";
+  type GameRole = "minority" | "majority" | "blind";
+  type ActivePowers = "interrogator" | "detective";
+  type PassivePowers = "chief" | "saboteur" | "briber";
+  type Superpower = {
+    name: string;
+    type: "active" | "passive";
+    description: string;
+    allowedRoles: GameRole[];
+  }
   type GameStatus = "waiting" | "ready" | "playing" | "finished";
 
   interface CreateRoomPayload {
@@ -39,17 +47,18 @@ declare global {
 
   interface GameRule {
     roles: {
-      mimic: boolean;
-      void: boolean;
+      minority: boolean;
+      blind: boolean;
     }
+    superpowers: boolean;
     category: string;
     language: string;
     status: GameStatus;
   }
 
   interface WordPair {
-    originalWord: string;
-    mimicWord: string;
+    majorityWord: string;
+    minorityWord: string;
   }
 
   /** The minimal voter identity we expose alongside vote tallies. */
@@ -62,6 +71,8 @@ declare global {
   interface PlayerWithRole extends PlayerSummary {
     gameRole: GameRole;
     gameWord: string | null;
+    superpower: Superpower | null;
+    hasUsedSuperpower: boolean | undefined;
     hasVoted: boolean;
     voters: PlayerSummary[];
     isAlive: boolean;
@@ -133,5 +144,17 @@ declare global {
   interface GameRestartPayload {
     playerEmail: string;
     roomId: string;
+  }
+
+  interface UseSuperpowerPayload {
+    playerEmail: string;
+    roomId: string;
+    powerName: string;
+  }
+
+  interface UseDetectivePayload {
+    roomId: string;
+    playerEmail: string;
+    targetPlayerEmail: string;
   }
 }

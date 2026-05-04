@@ -16,6 +16,8 @@ export function publicPlayer(player: PlayerWithRole): PlayerWithRole {
     playerEmail: player.playerEmail,
     gameRole: player.gameRole,
     gameWord: player.gameWord,
+    superpower: player.superpower,
+    hasUsedSuperpower: player.hasUsedSuperpower,
     hasVoted: player.hasVoted,
     voters: player.voters,
     isAlive: player.isAlive,
