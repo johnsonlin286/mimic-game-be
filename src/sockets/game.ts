@@ -1,6 +1,6 @@
 import { Server, Socket } from "socket.io";
 
-import { calculateRoles, calculateSuperpowers, roleFisherYatesShuffle } from "../algorithmScript";
+import { assignRolesWithRotation, calculateRoles, calculateSuperpowers } from "../algorithmScript";
 import { randomWordPair } from "../wordsBank";
 import { assignSuperpowersForRound } from "../superpowers";
 import calculateVoteResults from "../voteScript";
@@ -97,26 +97,29 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       if (!requireHost(socket, player, "game-initialize-failed")) return;
     }
 
-    const { numMinorities, numBlinds, numMajorities } = calculateRoles(
+    const { numMinorities, numBlinds } = calculateRoles(
       room.roomPlayers.length,
       room.gameRule.roles.blind,
     );
-    const roleDeck: GameRole[] = [
-      ...Array<GameRole>(numMinorities).fill("minority"),
-      ...Array<GameRole>(numBlinds).fill("blind"),
-      ...Array<GameRole>(numMajorities).fill("majority"),
-    ];
-    const shuffledRoleDeck = roleFisherYatesShuffle(roleDeck);
 
     const previousPairs = room.gameData?.wordPairList ?? [];
+    const previousRoleHistory = room.gameData?.roleHistory ?? [];
+
     const newWordPair = randomWordPair(
       room.gameRule.language,
       room.gameRule.category,
       previousPairs,
     );
 
-    const playersWithRoles: PlayerWithRole[] = room.roomPlayers.map((p, i) => {
-      const role = shuffledRoleDeck[i] ?? "majority";
+    const { roleMap, updatedHistory } = assignRolesWithRotation(
+      room.roomPlayers,
+      numMinorities,
+      numBlinds,
+      previousRoleHistory,
+    );
+
+    const playersWithRoles: PlayerWithRole[] = room.roomPlayers.map(p => {
+      const role = roleMap.get(p.playerEmail) ?? "majority";
       return {
         socketId: p.socketId,
         playerName: p.playerName,
@@ -131,21 +134,21 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       };
     });
 
-    if (room.gameRule.superpowers) {  
-      const { numActivePowers, numPassivePowers } = calculateSuperpowers(
-        room.roomPlayers.length,
-        room.gameRule.superpowers,
-      );
-      assignSuperpowersForRound(playersWithRoles, numActivePowers, numPassivePowers);
-    }
+    const { numActivePowers, numPassivePowers } = calculateSuperpowers(
+      room.roomPlayers.length,
+      room.gameRule.superpowers,
+    );
+    assignSuperpowersForRound(playersWithRoles, numActivePowers, numPassivePowers);
 
-    // When the category is exhausted we restart with just the latest pair
-    // instead of accumulating duplicates indefinitely.
+    // When the word category is exhausted we restart from the full pool.
+    // roleHistory resets independently (via updatedHistory) when all players
+    // have cycled through a special role.
     room.gameData = {
       players: playersWithRoles,
       wordPairList: newWordPair.hasNoMoreWords
         ? [newWordPair]
         : [newWordPair, ...previousPairs],
+      roleHistory: updatedHistory,
     };
     room.updatedAt = new Date();
 
@@ -275,6 +278,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
 
     room.gameData = {
       wordPairList: room.gameData?.wordPairList ?? [],
+      roleHistory: room.gameData?.roleHistory ?? [],
       players: results.data.players,
     };
 
@@ -341,6 +345,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     );
     room.gameData = {
       wordPairList: room.gameData?.wordPairList ?? [],
+      roleHistory: room.gameData?.roleHistory ?? [],
       players: updatedPlayers,
     };
     room.updatedAt = new Date();
@@ -408,7 +413,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     if (!room) return;
 
     room.gameRule.status = "ready";
-    room.gameData = { wordPairList: [], players: [] };
+    room.gameData = { wordPairList: [], roleHistory: [], players: [] };
     room.updatedAt = new Date();
 
     io.to(payload.roomId).emit("listen-game-restart-success", {

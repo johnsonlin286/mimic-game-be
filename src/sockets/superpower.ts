@@ -3,17 +3,11 @@ import { Server, Socket } from "socket.io";
 import {
   findGamePlayer,
   findRoom,
-  findRoomPlayer,
-  requireGameStatus,
-  requireHost,
 } from "./guards";
 import { maskedPlayer, publicPlayer } from "./serializers";
 
 export default function registerSuperpowerHandlers(io: Server, socket: Socket) {
   
-  const useDetective = (player: PlayerWithRole, room: RoomData) => {
-    // TODO: implement
-  }
 
   const useSuperpower = (payload: UseSuperpowerPayload) => {
     const room = findRoom(socket, payload.roomId, "use-superpower-failed");
@@ -36,15 +30,14 @@ export default function registerSuperpowerHandlers(io: Server, socket: Socket) {
     player.hasUsedSuperpower = true;
     switch (payload.powerName) {
       case "interrogator":
-        // socket.emit("use-superpower-interrogator", {
-        //   success: true,
-        //   message: "You used the interrogator superpower",
-        //   data: publicPlayer(player),
-        // });
+        socket.emit("use-superpower-interrogator", {
+          success: true,
+          message: "You used the interrogator superpower",
+          data: publicPlayer(player),
+        });
         io.to(room.roomId).emit("listen-use-superpower-success", {
           success: true,
           message: `${player.playerName} used the interrogator superpower`,
-          data: maskedPlayer(player),
         });
         break;
       case "detective":
@@ -59,6 +52,7 @@ export default function registerSuperpowerHandlers(io: Server, socket: Socket) {
               playerName: p.playerName,
               playerEmail: p.playerEmail,
               gameRole: p.gameRole === "majority" ? "majority" : "minority",
+              hasUsedSuperpower: p.hasUsedSuperpower,
             }
           )),
         });

@@ -80,6 +80,8 @@ declare global {
 
   interface GameData {
     wordPairList: WordPair[];
+    /** Emails of players who received minority/blind since the last rotation reset. */
+    roleHistory: string[];
     players: PlayerWithRole[];
   }
   interface RoomData {
