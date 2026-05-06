@@ -110,4 +110,36 @@ function assignRolesWithRotation(
   return { roleMap, updatedHistory };
 }
 
-export { calculateRoles, calculateSuperpowers, assignRolesWithRotation, roleFisherYatesShuffle };
+/**
+ * Returns a masked version of a word where all characters are hidden as "_"
+ * except one randomly revealed letter (spaces are always kept visible).
+ *
+ * e.g. "HOSPITAL" → "_ _ S _ _ _ _ _"
+ *      "Ice Cream" → "_ _ e   C _ _ _ _"
+ *      null / ""   → "NO SIGNAL"
+ */
+function maskWordWithHint(word: string | null): string {
+  if (!word) return "NO SIGNAL";
+
+  const chars = [...word];
+
+  // Collect indices of actual letters (skip spaces).
+  const letterIndices = chars.reduce<number[]>((acc, ch, i) => {
+    if (ch !== " ") acc.push(i);
+    return acc;
+  }, []);
+
+  if (letterIndices.length === 0) return word;
+
+  // Pick one letter index to reveal.
+  const revealIdx = letterIndices[Math.floor(Math.random() * letterIndices.length)]!;
+
+  return chars
+    .map((ch, i) => {
+      if (ch === " ") return " ";
+      return i === revealIdx ? ch : "_";
+    })
+    .join(" ");
+}
+
+export { calculateRoles, calculateSuperpowers, assignRolesWithRotation, roleFisherYatesShuffle, maskWordWithHint };

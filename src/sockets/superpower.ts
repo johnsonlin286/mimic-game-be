@@ -1,5 +1,6 @@
 import { Server, Socket } from "socket.io";
 
+import { maskWordWithHint } from "../algorithmScript";
 import {
   findGamePlayer,
   findRoom,
@@ -7,8 +8,6 @@ import {
 import { maskedPlayer, publicPlayer } from "./serializers";
 
 export default function registerSuperpowerHandlers(io: Server, socket: Socket) {
-  
-
   const useSuperpower = (payload: UseSuperpowerPayload) => {
     const room = findRoom(socket, payload.roomId, "use-superpower-failed");
     if (!room) return;
@@ -28,6 +27,7 @@ export default function registerSuperpowerHandlers(io: Server, socket: Socket) {
 
     room.updatedAt = new Date();
     player.hasUsedSuperpower = true;
+    let players: PlayerWithRole[] = [];
     switch (payload.powerName) {
       case "interrogator":
         socket.emit("use-superpower-interrogator", {
@@ -42,7 +42,7 @@ export default function registerSuperpowerHandlers(io: Server, socket: Socket) {
         break;
       case "detective":
         // fetch all isAlive players in the room except the player and send them to the player
-        const players = room.gameData?.players?.filter(p => p.isAlive && p.playerEmail !== payload.playerEmail) ?? [];
+        players = room.gameData?.players?.filter(p => p.isAlive && p.playerEmail !== payload.playerEmail) ?? [];
         socket.emit("use-superpower-detective", {
           success: true,
           message: "You used the detective superpower",
@@ -59,6 +59,27 @@ export default function registerSuperpowerHandlers(io: Server, socket: Socket) {
         io.to(room.roomId).emit("listen-use-superpower-success", {
           success: true,
           message: `${player.playerName} used the detective superpower`,
+          data: maskedPlayer(player),
+        });
+        break;
+      case "wiretapper":
+        players = room.gameData?.players?.filter(p => p.isAlive && p.playerEmail !== payload.playerEmail) ?? [];
+        const playersWords = players.map(p => (
+          {
+            socketId: p.socketId,
+            playerName: p.playerName,
+            playerEmail: p.playerEmail,
+            gameRole: p.gameRole === "blind" ? "NO SIGNAL" : maskWordWithHint(p.gameWord),
+          }
+        ));
+        socket.emit("use-superpower-wiretapper", {
+          success: true,
+          message: "You used the wiretapper superpower",
+          data: playersWords,
+        });
+        io.to(room.roomId).emit("listen-use-superpower-success", {
+          success: true,
+          message: `${player.playerName} used the wiretapper superpower`,
           data: maskedPlayer(player),
         });
         break;

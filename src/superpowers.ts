@@ -11,13 +11,19 @@ const superpowers: Superpower[] = [
     name: "interrogator",
     type: "active",
     description: "Force any player to immediately give a second, completely different clue. Use this to put the pressure on someone acting suspicious.",
-    allowedRoles: ["minority", "majority"],
+    allowedRoles: ["minority", "majority", "blind"],
   },
   {
     name: "detective",
     type: "active",
     description: "Secretly scan one player to reveal their true alignment (Friend or Enemy). You will know the truth, but you still have to convince the group.",
-    allowedRoles: ["minority", "majority"],
+    allowedRoles: ["minority", "majority", "blind"],
+  },
+  {
+    name: "wiretapper",
+    type: "active",
+    description: "You can secretly see one letter of target player's word randomly.",
+    allowedRoles: ["minority", "majority", "blind"],
   },
   {
     name: "chief",
