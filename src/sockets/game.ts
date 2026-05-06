@@ -304,6 +304,16 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       results.message === "Game continue" ? "Game continue" :
       results.message;
 
+    // Notify clients about any passive superpower effects that fired this round
+    // so the UI can show an announcement before revealing the elimination result.
+    if (results.triggeredEffects.length > 0) {
+      io.to(payload.roomId).emit("listen-game-superpower-triggered", {
+        success: true,
+        message: "Passive superpower triggered",
+        data: { triggeredEffects: results.triggeredEffects },
+      });
+    }
+
     // When someone has won we expose the full word history so the client can
     // show what every round's pair was. Mid-game broadcasts stay sanitized.
     const isWinner = message.endsWith("is the winner");
