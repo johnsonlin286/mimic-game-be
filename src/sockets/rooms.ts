@@ -23,7 +23,7 @@ function syncLobbyStatus(room: RoomData): void {
 
 export default function registerRoomHandlers(io: Server, socket: Socket) {
   const roomCreate = (payload: CreateRoomPayload) => {
-    const { playerName, creatorEmail, roomMaxPlayers, isPublic } = payload;
+    const { playerName, creatorEmail, creatorAvatar, roomMaxPlayers, isPublic } = payload;
 
     if (!playerName) {
       socket.emit("room-create-failed", {
@@ -70,7 +70,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       roomId,
       roomMaxPlayers,
       roomPlayers: [
-        { socketId: socket.id, playerName, playerEmail: creatorEmail, role: "host" },
+        { socketId: socket.id, playerName, playerEmail: creatorEmail, playerAvatar: creatorAvatar, role: "host" },
       ],
       gameRule: {
         roles: { minority: true, blind: false },
@@ -122,6 +122,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       socketId: socket.id,
       playerName: payload.playerName,
       playerEmail: payload.playerEmail,
+      playerAvatar: payload.playerAvatar,
       role: "player",
     });
     syncLobbyStatus(room);

@@ -16,6 +16,7 @@ declare global {
   interface CreateRoomPayload {
     playerName: string;
     creatorEmail: string;
+    creatorAvatar: string;
     roomMaxPlayers: number;
     isPublic: boolean;
   }
@@ -24,6 +25,7 @@ declare global {
     roomId: string;
     playerName: string;
     playerEmail: string;
+    playerAvatar: string;
     roomPin: string;
   }
 
@@ -42,6 +44,7 @@ declare global {
     socketId: string;
     playerName: string;
     playerEmail: string;
+    playerAvatar: string;
     role: RoomRole;
   }
 
