@@ -138,7 +138,13 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       room.roomPlayers.length,
       room.gameRule.superpowers,
     );
-    assignSuperpowersForRound(playersWithRoles, numActivePowers, numPassivePowers);
+    const previousSuperpowerHistory = room.gameData?.superpowerHistory ?? [];
+    const newSuperpowerHistory = assignSuperpowersForRound(
+      playersWithRoles,
+      numActivePowers,
+      numPassivePowers,
+      previousSuperpowerHistory,
+    );
 
     // When the word category is exhausted we restart from the full pool.
     // roleHistory resets independently (via updatedHistory) when all players
@@ -149,6 +155,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
         ? [newWordPair]
         : [newWordPair, ...previousPairs],
       roleHistory: updatedHistory,
+      superpowerHistory: newSuperpowerHistory,
     };
     room.updatedAt = new Date();
 
@@ -279,6 +286,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     room.gameData = {
       wordPairList: room.gameData?.wordPairList ?? [],
       roleHistory: room.gameData?.roleHistory ?? [],
+      superpowerHistory: room.gameData?.superpowerHistory ?? [],
       players: results.data.players,
     };
 
@@ -356,6 +364,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     room.gameData = {
       wordPairList: room.gameData?.wordPairList ?? [],
       roleHistory: room.gameData?.roleHistory ?? [],
+      superpowerHistory: room.gameData?.superpowerHistory ?? [],
       players: updatedPlayers,
     };
     room.updatedAt = new Date();
@@ -423,7 +432,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     if (!room) return;
 
     room.gameRule.status = "ready";
-    room.gameData = { wordPairList: [], roleHistory: [], players: [] };
+    room.gameData = { wordPairList: [], roleHistory: [], superpowerHistory: [], players: [] };
     room.updatedAt = new Date();
 
     io.to(payload.roomId).emit("listen-game-restart-success", {
@@ -436,6 +445,15 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     });
   };
 
+  const hideOverlay = (roomId: string) => {
+    const room = findRoom(socket, roomId, "hide-overlay-failed");
+    if (!room) return;
+
+    room.updatedAt = new Date();
+
+    io.to(roomId).emit("listen-hide-overlay-success", { success: true });
+  }
+
   socket.on("game:update-rule", gameRuleUpdate);
   socket.on("game:start", gameStart);
   socket.on("game:initialize", gameInitialize);
@@ -445,4 +463,5 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
   socket.on("game:void-guess-the-word", gameVoidGuessTheWord);
   socket.on("game:continue", gameContinue);
   socket.on("game:restart", gameRestart);
+  socket.on("game:hide-overlay", hideOverlay);
 }

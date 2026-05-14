@@ -59,30 +59,44 @@ const defByName = new Map(superpowers.map(s => [s.name, s]));
  * player: `numActivePowers` distinct actives + `numPassivePowers` distinct
  * passives, respecting `allowedRoles` (minority/blind never get chief/saboteur).
  * Unfilled players keep `agent` (no superpower). Unplaceable powers are skipped.
+ *
+ * Superpowers that were assigned in the previous round (`previousSuperpowerNames`)
+ * are excluded from this round's pool — they become eligible again next round.
+ * If excluding them leaves too few options the excluded set is ignored as a fallback.
+ *
+ * @returns The names of the superpowers actually assigned this round (to be
+ *          stored as `superpowerHistory` for the next round).
  */
 function assignSuperpowersForRound(
   players: PlayerWithRole[],
   numActivePowers: number,
   numPassivePowers: number,
-): void {
+  previousSuperpowerNames: string[] = [],
+): string[] {
   for (const p of players) {
     p.superpower = AGENT;
   }
 
   const totalSlots = numActivePowers + numPassivePowers;
-  if (totalSlots === 0 || players.length === 0) return;
+  if (totalSlots === 0 || players.length === 0) return [];
+
+  const previousSet = new Set(previousSuperpowerNames);
+
+  /**
+   * Build a filtered pool, falling back to the full pool when excluding the
+   * previous round's picks would leave fewer options than `needed`.
+   */
+  function pickNames(pool: Superpower[], needed: number): string[] {
+    const filtered = pool.filter(s => !previousSet.has(s.name));
+    const source = filtered.length >= needed ? filtered : pool;
+    return shuffleInPlace([...source.map(s => s.name)]).slice(0, Math.min(needed, source.length));
+  }
 
   const activeDefs = superpowers.filter(s => s.type === "active");
   const passiveDefs = superpowers.filter(s => s.type === "passive");
 
-  const activeNames = shuffleInPlace([...activeDefs.map(s => s.name)]).slice(
-    0,
-    Math.min(numActivePowers, activeDefs.length),
-  );
-  const passiveNames = shuffleInPlace([...passiveDefs.map(s => s.name)]).slice(
-    0,
-    Math.min(numPassivePowers, passiveDefs.length),
-  );
+  const activeNames = pickNames(activeDefs, numActivePowers);
+  const passiveNames = pickNames(passiveDefs, numPassivePowers);
 
   type Slot = { name: string };
   const slots: Slot[] = [
@@ -90,6 +104,8 @@ function assignSuperpowersForRound(
     ...passiveNames.map(name => ({ name })),
   ];
   shuffleInPlace(slots);
+
+  const assignedNames: string[] = [];
 
   for (const { name } of slots) {
     const def = defByName.get(name);
@@ -102,8 +118,13 @@ function assignSuperpowersForRound(
 
     shuffleInPlace(candidates);
     const pick = candidates[0];
-    if (pick) pick.superpower = def;
+    if (pick) {
+      pick.superpower = def;
+      assignedNames.push(name);
+    }
   }
+
+  return assignedNames;
 }
 
 const randomSuperpower = (previous?: string): Superpower => {

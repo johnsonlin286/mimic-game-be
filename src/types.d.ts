@@ -85,6 +85,8 @@ declare global {
     wordPairList: WordPair[];
     /** Emails of players who received minority/blind since the last rotation reset. */
     roleHistory: string[];
+    /** Superpower names assigned in the previous round (excluded from the current round's pool). */
+    superpowerHistory: string[];
     players: PlayerWithRole[];
   }
   interface RoomData {
@@ -158,6 +160,12 @@ declare global {
   }
 
   interface UseDetectivePayload {
+    roomId: string;
+    playerEmail: string;
+    targetPlayerEmail: string;
+  }
+
+  interface InterrogatorPickTargetPayload {
     roomId: string;
     playerEmail: string;
     targetPlayerEmail: string;
