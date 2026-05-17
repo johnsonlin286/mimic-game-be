@@ -142,7 +142,7 @@ declare global {
     roomId: string;
   }
 
-  interface GameVoidGuessTheWordPayload {
+  interface GameBlindGuessTheWordPayload {
     playerEmail: string;
     roomId: string;
     guessWord: string;

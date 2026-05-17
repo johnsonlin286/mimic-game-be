@@ -305,8 +305,8 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       });
     });
 
-    // Announce the round outcome. The "Void guess the word" branch also
-    // notifies the void privately so they can submit a guess.
+    // Announce the round outcome. The "Blind guess the word" branch also
+    // notifies the Blind privately so they can submit a guess.
     if (results.message === "Blind guess the word") {
       const blindPlayer = room.gameData.players.find(p => p.gameRole === "blind");
       if (!blindPlayer) {
@@ -348,7 +348,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     });
   };
 
-  const gameVoidGuessTheWord = (payload: GameVoidGuessTheWordPayload) => {
+  const gameBlindGuessTheWord = (payload: GameBlindGuessTheWordPayload) => {
     const room = findRoom(socket, payload.roomId, "game-blind-guess-the-word-failed");
     if (!room) return;
 
@@ -406,10 +406,10 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
 
     io.to(payload.roomId).emit("listen-game-blind-guess-the-word-incorrectly", {
       success: true,
-      message: "Void guessed the word incorrectly",
+      message: "The blind guessed the word incorrectly",
       data: {
         outcomeMessage,
-        room: gameBroadcast(room),
+        room: gameBroadcast(room, { includeWordPairList: true }),
       },
     });
   };
@@ -476,7 +476,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
   socket.on("game:start-vote", gameStartVote);
   socket.on("game:vote-response", gameVoteResponse);
   socket.on("game:calculate-results", gameCalculateVote);
-  socket.on("game:void-guess-the-word", gameVoidGuessTheWord);
+  socket.on("game:blind-guess-the-word", gameBlindGuessTheWord);
   socket.on("game:continue", gameContinue);
   socket.on("game:restart", gameRestart);
   socket.on("game:hide-overlay", hideOverlay);
