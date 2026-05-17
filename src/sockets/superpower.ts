@@ -99,6 +99,39 @@ export default function registerSuperpowerHandlers(io: Server, socket: Socket) {
     }
   };
 
+  const usePassivePower = (payload: UsePassivePowerPayload) => {
+    const room = findRoom(socket, payload.roomId, "use-passive-power-failed");
+    if (!room) return;
+
+    const player = findGamePlayer(socket, room, payload.playerEmail, "use-passive-power-failed");
+    if (!player) return;
+
+    if (player.superpower?.name !== payload.powerName) {
+      socket.emit("use-passive-power-failed", { success: false, message: "You don't have this power" });
+    }
+
+    if (player.hasUsedSuperpower) {
+      socket.emit("use-passive-power-failed", { success: false, message: "You have already used this power" });
+      return;
+    }
+
+    if (payload.isActive) {
+      room.gameData!.usePassivePowers = {
+        powerName: payload.powerName,
+        isActive: payload.isActive,
+        playerEmail: payload.playerEmail,
+      };
+    } else {
+      room.gameData!.usePassivePowers = null;
+    }
+    room.updatedAt = new Date();
+
+    socket.emit("use-passive-power-success", {
+      success: true,
+      message: `You ${payload.isActive ? "activated" : "deactivated"} the ${payload.powerName}`,
+    });
+  }
+
   const interrogatorPickTarget = (payload: InterrogatorPickTargetPayload) => {
     const room = findRoom(socket, payload.roomId, "interrogator-pick-target-failed");
     if (!room) return;
@@ -142,5 +175,6 @@ export default function registerSuperpowerHandlers(io: Server, socket: Socket) {
   }
 
   socket.on("superpower:use-power", useSuperpower);
+  socket.on("superpower:use-passive-power", usePassivePower);
   socket.on("superpower:interrogator-pick-target", interrogatorPickTarget);
 }

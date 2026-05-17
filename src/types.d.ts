@@ -75,7 +75,7 @@ declare global {
     gameRole: GameRole;
     gameWord: string | null;
     superpower: Superpower | null;
-    hasUsedSuperpower: boolean | undefined;
+    hasUsedSuperpower: boolean;
     hasVoted: boolean;
     voters: PlayerSummary[];
     isAlive: boolean;
@@ -88,6 +88,11 @@ declare global {
     /** Superpower names assigned in the previous round (excluded from the current round's pool). */
     superpowerHistory: string[];
     players: PlayerWithRole[];
+    usePassivePowers?: {
+      powerName: string;
+      isActive: boolean;
+      playerEmail: string;
+    } | null;
   }
   interface RoomData {
     creatorEmail: string;
@@ -157,6 +162,13 @@ declare global {
     playerEmail: string;
     roomId: string;
     powerName: string;
+  }
+
+  interface UsePassivePowerPayload {
+    playerEmail: string;
+    roomId: string;
+    powerName: string;
+    isActive: boolean;
   }
 
   interface UseDetectivePayload {

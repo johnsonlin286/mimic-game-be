@@ -4,7 +4,12 @@ export interface TriggeredEffect {
   playerEmail: string;
 }
 
-export default function calculateVoteResults(players: PlayerWithRole[]) {
+type UsePassivePowersState = GameData["usePassivePowers"];
+
+export default function calculateVoteResults(
+  players: PlayerWithRole[],
+  usePassivePowers: UsePassivePowersState = null,
+) {
   if (!players?.length) {
     return {
       success: false,
@@ -15,12 +20,13 @@ export default function calculateVoteResults(players: PlayerWithRole[]) {
   }
 
   const superpowerName = (p: PlayerWithRole) => p.superpower?.name ?? null;
+  const selectedPassive =
+    usePassivePowers && usePassivePowers.isActive ? usePassivePowers : null;
 
   // ─── Step 1: Pre-compute effective vote counts ────────────────────────────────
   //
-  // Briber shield: reduce the target's vote count by 1 when they have > 1 vote
-  // and haven't used the power yet. We record the email here so we can mark
-  // hasUsedSuperpower in the output — even if the round ends in a tie.
+  // Briber shield only applies when usePassivePowers is set and points to
+  // an active briber owner.
 
   let briberTriggeredEmail: string | null = null;
   const effectiveVotes = new Map<string, number>();
@@ -29,7 +35,20 @@ export default function calculateVoteResults(players: PlayerWithRole[]) {
     if (!p.isAlive) continue;
     const raw = p.voters.length;
     let effective = raw;
-    if (superpowerName(p) === "briber" && !p.hasUsedSuperpower && raw > 1) {
+    const isSelectedBriber =
+      selectedPassive?.powerName === "briber"
+      && selectedPassive.playerEmail === p.playerEmail
+      && superpowerName(p) === "briber";
+
+    if (isSelectedBriber && raw > 1) {
+      if (p.hasUsedSuperpower) {
+        return {
+          success: false,
+          message: "Passive power already used",
+          data: { players },
+          triggeredEffects: [] as TriggeredEffect[],
+        };
+      }
       effective = raw - 1;
       briberTriggeredEmail = p.playerEmail;
     }
@@ -63,18 +82,26 @@ export default function calculateVoteResults(players: PlayerWithRole[]) {
 
   // ─── Step 3: Chief tie-break ──────────────────────────────────────────────────
   //
-  // Only fires when the first pass ended in a tie AND there is a living chief
-  // who has not yet used their power. The chief's vote target receives +1 weight.
-  // chiefTriggeredEmail is only set when the bonus actually resolves the tie,
-  // so an unsuccessful attempt does NOT consume the chief's power.
+  // Chief tie-break only applies when usePassivePowers is set with chief.
 
   let chiefTriggeredEmail: string | null = null;
 
-  if (isTie) {
+  if (isTie && selectedPassive?.powerName === "chief") {
     const chief = players.find(
-      p => p.isAlive && !p.hasUsedSuperpower && superpowerName(p) === "chief",
+      p =>
+        p.isAlive
+        && p.playerEmail === selectedPassive.playerEmail
+        && superpowerName(p) === "chief",
     );
     if (chief) {
+      if (chief.hasUsedSuperpower) {
+        return {
+          success: false,
+          message: "Passive power already used",
+          data: { players },
+          triggeredEffects: [] as TriggeredEffect[],
+        };
+      }
       const chiefVotedForEmail =
         players.find(
           p => p.isAlive && p.voters.some(v => v.playerEmail === chief.playerEmail),
@@ -105,9 +132,9 @@ export default function calculateVoteResults(players: PlayerWithRole[]) {
   // and the briber/chief would be seen as "not yet used" on the next call.
   //
   // Rules:
-  //   • Briber  — consumed whenever the shield fires (vote reduced), tie or not.
-  //   • Chief   — consumed only when their bonus actually resolved a tie.
-  //   • Saboteur — passive with no "used" state; always checked at elimination.
+  //   • Briber  — consumed whenever selected and effect is applied.
+  //   • Chief   — consumed when selected and tie-break resolves.
+  //   • Saboteur — consumed when selected owner is eliminated.
 
   const powersTriggered = new Set<string>();
   if (briberTriggeredEmail) powersTriggered.add(briberTriggeredEmail);
@@ -196,12 +223,41 @@ export default function calculateVoteResults(players: PlayerWithRole[]) {
 
   const eliminated = players.find(p => p.isAlive && p.playerEmail === topEmail);
 
-  if (eliminated && superpowerName(eliminated) === "saboteur") {
+  const isSelectedSaboteur =
+    !!selectedPassive
+    && selectedPassive.powerName === "saboteur"
+    && selectedPassive.playerEmail === eliminated?.playerEmail
+    && eliminated
+    && superpowerName(eliminated) === "saboteur";
+
+  if (isSelectedSaboteur && eliminated) {
+    if (eliminated.hasUsedSuperpower) {
+      return {
+        success: false,
+        message: "Passive power already used",
+        data: { players: newPlayers },
+        triggeredEffects,
+      };
+    }
+
+    const saboteurPlayers = newPlayers.map(p =>
+      p.playerEmail === eliminated.playerEmail
+        ? { ...p, hasUsedSuperpower: true }
+        : p,
+    );
+
     return {
       success: true,
       message: "Saboteur is the winner",
-      data: { players: newPlayers },
-      triggeredEffects,
+      data: { players: saboteurPlayers },
+      triggeredEffects: [
+        ...triggeredEffects,
+        {
+          power: "saboteur",
+          playerName: eliminated.playerName,
+          playerEmail: eliminated.playerEmail,
+        },
+      ],
     };
   }
 

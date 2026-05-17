@@ -31,6 +31,7 @@ export function maskedPlayer(player: PlayerWithRole) {
     playerName: player.playerName,
     playerEmail: player.playerEmail,
     hasVoted: player.hasVoted,
+    hasUsedSuperpower: player.hasUsedSuperpower,
     voters: player.voters,
     isAlive: player.isAlive,
   };

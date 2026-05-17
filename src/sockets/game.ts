@@ -127,7 +127,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
         gameRole: role,
         gameWord: wordForRole(role, newWordPair),
         superpower: null,
-        hasUsedSuperpower: undefined,
+        hasUsedSuperpower: false,
         hasVoted: false,
         voters: [],
         isAlive: true,
@@ -156,6 +156,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
         : [newWordPair, ...previousPairs],
       roleHistory: updatedHistory,
       superpowerHistory: newSuperpowerHistory,
+      usePassivePowers: null,
     };
     room.updatedAt = new Date();
 
@@ -272,7 +273,10 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     if (!player) return;
     if (!requireHost(socket, player, "game-calculate-results-failed")) return;
 
-    const results = calculateVoteResults(room.gameData?.players ?? []);
+    const results = calculateVoteResults(
+      room.gameData?.players ?? [],
+      room.gameData?.usePassivePowers ?? null,
+    );
     room.updatedAt = new Date();
 
     if (!results.success) {
@@ -288,7 +292,18 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       roleHistory: room.gameData?.roleHistory ?? [],
       superpowerHistory: room.gameData?.superpowerHistory ?? [],
       players: results.data.players,
+      usePassivePowers: null,
     };
+
+    results.data.players.forEach(p => {
+      io.to(p.socketId).emit("listen-game-calculate-results-player", {
+        success: true,
+        message: "Game calculate results player",
+        data: {
+          room: gameBroadcast(room),
+        },
+      });
+    });
 
     // Announce the round outcome. The "Void guess the word" branch also
     // notifies the void privately so they can submit a guess.
@@ -366,6 +381,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       roleHistory: room.gameData?.roleHistory ?? [],
       superpowerHistory: room.gameData?.superpowerHistory ?? [],
       players: updatedPlayers,
+      usePassivePowers: room.gameData?.usePassivePowers ?? null,
     };
     room.updatedAt = new Date();
 
@@ -432,7 +448,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     if (!room) return;
 
     room.gameRule.status = "ready";
-    room.gameData = { wordPairList: [], roleHistory: [], superpowerHistory: [], players: [] };
+    room.gameData = { wordPairList: [], roleHistory: [], superpowerHistory: [], players: [], usePassivePowers: null };
     room.updatedAt = new Date();
 
     io.to(payload.roomId).emit("listen-game-restart-success", {
