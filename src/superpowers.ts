@@ -17,13 +17,13 @@ const superpowers: Superpower[] = [
     name: "detective",
     type: "active",
     description: "Secretly scan one player to reveal their true alignment (Friend or Enemy). You will know the truth, but you still have to convince the group.",
-    allowedRoles: ["minority", "majority", "blind"],
+    allowedRoles: ["minority", "majority"],
   },
   {
     name: "wiretapper",
     type: "active",
     description: "You can secretly see one letter of target player's word randomly.",
-    allowedRoles: ["minority", "majority", "blind"],
+    allowedRoles: ["minority", "blind"],
   },
   {
     name: "chief",
@@ -41,7 +41,7 @@ const superpowers: Superpower[] = [
     name: "briber",
     type: "passive",
     description: "You have a natural defense against the mob. If you receive more than one vote during the elimination phase, your total vote count is automatically reduced by one.",
-    allowedRoles: ["minority", "majority", "blind"],
+    allowedRoles: ["minority", "blind"],
   },
 ];
 

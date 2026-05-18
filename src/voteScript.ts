@@ -134,7 +134,7 @@ export default function calculateVoteResults(
   // Rules:
   //   • Briber  — consumed whenever selected and effect is applied.
   //   • Chief   — consumed when selected and tie-break resolves.
-  //   • Saboteur — consumed when selected owner is eliminated.
+  //   • Saboteur — reusable within the current game cycle; not consumed here.
 
   const powersTriggered = new Set<string>();
   if (briberTriggeredEmail) powersTriggered.add(briberTriggeredEmail);
@@ -218,7 +218,7 @@ export default function calculateVoteResults(
   //                (Must precede "Majority wins" so the guess isn't skipped even
   //                when all minorities are already dead.)
   // 3. Majority  — wins when every opposition player has been eliminated.
-  // 4. Opposition — wins when they equal or outnumber the majority.
+  // 4. Opposition — wins on parity: opposition count >= majority count.
   // 5. Continue  — none of the above; next round begins.
 
   const eliminated = players.find(p => p.isAlive && p.playerEmail === topEmail);
@@ -231,25 +231,10 @@ export default function calculateVoteResults(
     && superpowerName(eliminated) === "saboteur";
 
   if (isSelectedSaboteur && eliminated) {
-    if (eliminated.hasUsedSuperpower) {
-      return {
-        success: false,
-        message: "Passive power already used",
-        data: { players: newPlayers },
-        triggeredEffects,
-      };
-    }
-
-    const saboteurPlayers = newPlayers.map(p =>
-      p.playerEmail === eliminated.playerEmail
-        ? { ...p, hasUsedSuperpower: true }
-        : p,
-    );
-
     return {
       success: true,
       message: "Saboteur is the winner",
-      data: { players: saboteurPlayers },
+      data: { players: newPlayers },
       triggeredEffects: [
         ...triggeredEffects,
         {
@@ -280,9 +265,16 @@ export default function calculateVoteResults(
   }
 
   if (majorityCount <= minorityCount + blindCount) {
+    const oppositionMessage =
+      minorityCount > 0 && blindCount > 0
+        ? "Minority and Blind are the winners"
+        : blindCount > 0
+          ? "Blind is the winner"
+          : "Minority is the winner";
+
     return {
       success: true,
-      message: minorityCount > 0 ? "Minority is the winner" : "Blind is the winner",
+      message: oppositionMessage,
       data: { players: newPlayers },
       triggeredEffects,
     };

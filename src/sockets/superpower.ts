@@ -110,7 +110,7 @@ export default function registerSuperpowerHandlers(io: Server, socket: Socket) {
       socket.emit("use-passive-power-failed", { success: false, message: "You don't have this power" });
     }
 
-    if (player.hasUsedSuperpower) {
+    if (player.hasUsedSuperpower && payload.powerName !== "saboteur") {
       socket.emit("use-passive-power-failed", { success: false, message: "You have already used this power" });
       return;
     }

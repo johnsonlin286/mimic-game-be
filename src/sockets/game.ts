@@ -368,6 +368,9 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       io.to(payload.roomId).emit("listen-game-blind-guess-the-word-correctly", {
         success: true,
         message: "Blind guessed the word correctly",
+        data: {
+          room: gameBroadcast(room, { includeWordPairList: true }),
+        },
       });
       return;
     }
@@ -430,16 +433,8 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       success: true,
       message: "Game continued successfully",
       data: {
-        ...room,
-        gameData: {
-          players: (room.gameData?.players ?? []).map(p => ({
-            ...p,
-            gameRole: null,
-            gameWord: null,
-            superpower: AGENT,
-          })),
-        },
-      },
+        room: gameBroadcast(room),
+      }
     });
   };
 
