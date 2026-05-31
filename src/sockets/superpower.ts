@@ -168,7 +168,7 @@ export default function registerSuperpowerHandlers(io: Server, socket: Socket) {
       message: `${player.playerName} picked ${targetPlayer.playerName} as the target`,
       data: {
         superpowerName: 'interrogator',
-        userName: player.playerName,
+        targetPlayerEmail: targetPlayer.playerEmail,
         message: `${player.playerName} picked ${targetPlayer.playerName} as the target`,
       }
     });
