@@ -187,7 +187,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
           playerName: player.playerName,
           playerEmail: player.playerEmail,
         },
-        room: roomBroadcast(room),
+        gameData: room.gameRule.status === "playing" ? room.gameData?.players.find(p => p.playerEmail === payload.playerEmail) : undefined,
       },
     });
   };
@@ -254,9 +254,10 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       // .filter() — iterating the live array would skip entries.
       const playersSnapshot = [...room.roomPlayers];
       for (const p of playersSnapshot) {
-        roomKick({ roomId: payload.roomId, socketId: p.socketId });
+        roomKick({ roomId: payload.roomId, socketId: p.socketId, leaveRoom: true });
       }
     } else {
+      if (!payload.leaveRoom) return;
       socket.leave(payload.roomId);
       room.roomPlayers = room.roomPlayers.filter(p => p.socketId !== payload.socketId);
       syncLobbyStatus(room);
@@ -293,7 +294,7 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
   const handleDisconnecting = () => {
     for (const roomId of socket.rooms) {
       if (roomId === socket.id) continue;
-      roomLeave({ roomId, socketId: socket.id });
+      roomLeave({ roomId, socketId: socket.id, leaveRoom: false });
     }
   };
 

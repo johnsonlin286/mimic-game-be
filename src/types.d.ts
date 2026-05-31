@@ -38,6 +38,7 @@ declare global {
   interface RoomLeavePayload {
     roomId: string;
     socketId: string;
+    leaveRoom: boolean;
   }
 
   interface RoomPlayerData {
