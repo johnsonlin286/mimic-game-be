@@ -15,14 +15,16 @@ export declare function maskedPlayer(player: PlayerWithRole): {
     playerName: string;
     playerEmail: string;
     hasVoted: boolean;
+    hasUsedSuperpower: boolean;
     voters: PlayerSummary[];
     isAlive: boolean;
 };
 /**
  * Broadcast view of a room used by `rooms.ts` events. Omits `creatorEmail`
- * and the entire `gameData` (rooms-channel events are pre-game / lobby state).
+ * (PII) but exposes `creatorName` so the lobby UI can label the host.
  */
 export declare function roomBroadcast(room: RoomData): {
+    creatorName: string;
     roomId: string;
     roomMaxPlayers: number;
     roomPlayers: RoomPlayerData[];
@@ -32,22 +34,32 @@ export declare function roomBroadcast(room: RoomData): {
     createdAt: Date;
     updatedAt: Date;
 };
+interface GameBroadcastOptions {
+    /** Reveal each player's `gameRole` and `gameWord`. Default: false. */
+    includeRoles?: boolean;
+    /** Include the historical `wordPairList`. Use when the round/game ends. */
+    includeWordPairList?: boolean;
+}
 /**
  * Broadcast view of a room used by `game.ts` events while a round is active.
- * Strips `wordPairList` and any per-player role/word data.
+ * Strips `wordPairList` and any per-player role/word data by default; opt-in
+ * via `options` when revealing end-of-round / end-of-game info.
  */
-export declare function gameBroadcast(room: RoomData, includeRoles?: boolean): {
+export declare function gameBroadcast(room: RoomData, options?: GameBroadcastOptions): {
     gameData: {
+        wordPairList?: WordPair[];
         players: {
             socketId: string;
             playerName: string;
             playerEmail: string;
             hasVoted: boolean;
+            hasUsedSuperpower: boolean;
             voters: PlayerSummary[];
             isAlive: boolean;
         }[];
     };
     creatorEmail: string;
+    creatorName: string;
     roomId: string;
     roomMaxPlayers: number;
     roomPlayers: RoomPlayerData[];
@@ -56,4 +68,5 @@ export declare function gameBroadcast(room: RoomData, includeRoles?: boolean): {
     createdAt: Date;
     updatedAt: Date;
 };
+export {};
 //# sourceMappingURL=serializers.d.ts.map

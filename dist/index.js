@@ -12,6 +12,7 @@ const rooms_1 = __importDefault(require("./routes/rooms"));
 const rooms_2 = __importDefault(require("./sockets/rooms"));
 const utils_1 = __importDefault(require("./sockets/utils"));
 const game_1 = __importDefault(require("./sockets/game"));
+const superpower_1 = __importDefault(require("./sockets/superpower"));
 const roomGarbageCollector_1 = require("./roomGarbageCollector");
 dotenv_1.default.config({
     quiet: true,
@@ -39,6 +40,7 @@ const onConnection = (socket) => {
     (0, rooms_2.default)(io, socket);
     (0, utils_1.default)(io, socket);
     (0, game_1.default)(io, socket);
+    (0, superpower_1.default)(io, socket);
     socket.on("disconnect", () => {
         console.log("A user disconnected");
     });

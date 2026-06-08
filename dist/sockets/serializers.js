@@ -21,6 +21,8 @@ function publicPlayer(player) {
         playerEmail: player.playerEmail,
         gameRole: player.gameRole,
         gameWord: player.gameWord,
+        superpower: player.superpower,
+        hasUsedSuperpower: player.hasUsedSuperpower,
         hasVoted: player.hasVoted,
         voters: player.voters,
         isAlive: player.isAlive,
@@ -33,16 +35,18 @@ function maskedPlayer(player) {
         playerName: player.playerName,
         playerEmail: player.playerEmail,
         hasVoted: player.hasVoted,
+        hasUsedSuperpower: player.hasUsedSuperpower,
         voters: player.voters,
         isAlive: player.isAlive,
     };
 }
 /**
  * Broadcast view of a room used by `rooms.ts` events. Omits `creatorEmail`
- * and the entire `gameData` (rooms-channel events are pre-game / lobby state).
+ * (PII) but exposes `creatorName` so the lobby UI can label the host.
  */
 function roomBroadcast(room) {
     return {
+        creatorName: room.creatorName,
         roomId: room.roomId,
         roomMaxPlayers: room.roomMaxPlayers,
         roomPlayers: room.roomPlayers,
@@ -55,14 +59,19 @@ function roomBroadcast(room) {
 }
 /**
  * Broadcast view of a room used by `game.ts` events while a round is active.
- * Strips `wordPairList` and any per-player role/word data.
+ * Strips `wordPairList` and any per-player role/word data by default; opt-in
+ * via `options` when revealing end-of-round / end-of-game info.
  */
-function gameBroadcast(room, includeRoles = false) {
+function gameBroadcast(room, options = {}) {
+    const { includeRoles = false, includeWordPairList = false } = options;
     const players = room.gameData?.players ?? [];
     return {
         ...room,
         gameData: {
             players: players.map(includeRoles ? publicPlayer : maskedPlayer),
+            ...(includeWordPairList
+                ? { wordPairList: room.gameData?.wordPairList ?? [] }
+                : {}),
         },
     };
 }

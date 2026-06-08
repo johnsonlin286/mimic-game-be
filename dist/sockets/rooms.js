@@ -26,7 +26,7 @@ function syncLobbyStatus(room) {
 }
 function registerRoomHandlers(io, socket) {
     const roomCreate = (payload) => {
-        const { playerName, creatorEmail, roomMaxPlayers, isPublic } = payload;
+        const { playerName, creatorEmail, creatorAvatar, roomMaxPlayers, isPublic } = payload;
         if (!playerName) {
             socket.emit("room-create-failed", {
                 success: false,
@@ -62,18 +62,20 @@ function registerRoomHandlers(io, socket) {
             });
             return;
         }
-        const reformedPlayerName = playerName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-        const roomId = `${reformedPlayerName}-${Date.now()}`;
+        const randomCode = Math.random().toString(36).substring(2, 6).toLowerCase();
+        const roomId = `${randomCode}`;
         const now = new Date();
         const roomData = {
             creatorEmail,
+            creatorName: playerName,
             roomId,
             roomMaxPlayers,
             roomPlayers: [
-                { socketId: socket.id, playerName, playerEmail: creatorEmail, role: "host" },
+                { socketId: socket.id, playerName, playerEmail: creatorEmail, playerAvatar: creatorAvatar, role: "host" },
             ],
             gameRule: {
-                roles: { mimic: true, void: false },
+                roles: { minority: true, blind: false },
+                superpowers: false,
                 category: "food-drink",
                 language: "en",
                 status: "waiting",
@@ -118,20 +120,27 @@ function registerRoomHandlers(io, socket) {
             socketId: socket.id,
             playerName: payload.playerName,
             playerEmail: payload.playerEmail,
+            playerAvatar: payload.playerAvatar,
             role: "player",
         });
         syncLobbyStatus(room);
         room.updatedAt = new Date();
-        const data = (0, serializers_1.roomBroadcast)(room);
+        const responseData = {
+            player: {
+                playerName: payload.playerName,
+                playerEmail: payload.playerEmail,
+            },
+            room: (0, serializers_1.roomBroadcast)(room),
+        };
         socket.emit("room-join-success", {
             success: true,
             message: "Room joined successfully",
-            data,
+            data: responseData,
         });
         io.to(payload.roomId).emit("listen-room-join-success", {
             success: true,
             message: `${payload.playerName} joined the room`,
-            data,
+            data: responseData,
         });
     };
     const roomRejoin = (payload) => {
@@ -151,9 +160,7 @@ function registerRoomHandlers(io, socket) {
             });
             return;
         }
-        // Reject only if the same email is registered in a *different* room. The
-        // previous implementation searched all rooms (including this one) and
-        // therefore always rejected — this is the bug fix.
+        // Reject if this email is registered in a different room.
         if (emailExistsInAnyRoom(payload.playerEmail, payload.roomId)) {
             socket.emit("room-rejoin-failed", {
                 success: false,
@@ -163,11 +170,27 @@ function registerRoomHandlers(io, socket) {
         }
         socket.join(payload.roomId);
         player.socketId = payload.socketId;
+        // update game data with the new socketId
+        if (room.gameRule.status === "playing") {
+            const gamePlayer = room.gameData?.players.find(p => p.playerEmail === payload.playerEmail);
+            if (gamePlayer) {
+                gamePlayer.socketId = payload.socketId;
+            }
+        }
         room.updatedAt = new Date();
-        io.to(payload.roomId).emit("room-rejoin-success", {
+        socket.emit("room-rejoin-success", {
             success: true,
             message: "Room rejoined successfully",
-            data: (0, serializers_1.roomBroadcast)(room),
+            data: {
+                player: {
+                    playerSocketId: player.socketId,
+                    playerName: player.playerName,
+                    playerEmail: player.playerEmail,
+                },
+                gameData: room.gameRule.status === "playing" ? room.gameData?.players.find(p => p.playerEmail === payload.playerEmail) : undefined,
+                gamePhase: room.gameData?.gamePhase,
+                voteResult: room.gameData?.voteResult,
+            },
         });
     };
     const roomKick = (payload) => {
@@ -198,7 +221,7 @@ function registerRoomHandlers(io, socket) {
         });
         io.to(payload.roomId).emit("listen-room-kick-player", {
             success: true,
-            message: `${player.playerEmail} has been kicked from the room`,
+            message: `${player.playerName} has been kicked from the room`,
             data: { room: (0, serializers_1.roomBroadcast)(room) },
         });
         if (room.roomPlayers.length === 0) {
@@ -227,10 +250,12 @@ function registerRoomHandlers(io, socket) {
             // .filter() — iterating the live array would skip entries.
             const playersSnapshot = [...room.roomPlayers];
             for (const p of playersSnapshot) {
-                roomKick({ roomId: payload.roomId, socketId: p.socketId });
+                roomKick({ roomId: payload.roomId, socketId: p.socketId, leaveRoom: true });
             }
         }
         else {
+            if (!payload.leaveRoom)
+                return;
             socket.leave(payload.roomId);
             room.roomPlayers = room.roomPlayers.filter(p => p.socketId !== payload.socketId);
             syncLobbyStatus(room);
@@ -238,15 +263,33 @@ function registerRoomHandlers(io, socket) {
             io.to(payload.roomId).emit("listen-room-leave-success", {
                 success: true,
                 message: `${player.playerEmail} left the room`,
-                data: (0, serializers_1.roomBroadcast)(room),
+                data: {
+                    player: {
+                        playerName: player.playerName,
+                        playerEmail: player.playerEmail,
+                    },
+                    room: (0, serializers_1.roomBroadcast)(room),
+                },
+            });
+            socket.emit("room-leave-success", {
+                success: true,
+                message: `${player.playerEmail} left the room`,
             });
         }
-        socket.emit("room-leave-success", {
-            success: true,
-            message: `${player.playerEmail} left the room`,
-        });
         if (rooms_1.default.has(payload.roomId) && room.roomPlayers.length === 0) {
             rooms_1.default.delete(payload.roomId);
+        }
+    };
+    /**
+     * When a socket drops, run the full roomLeave logic for every room it was
+     * in. We use `disconnecting` (not `disconnect`) because `socket.rooms` is
+     * still populated at that point, so we only touch the relevant rooms.
+     */
+    const handleDisconnecting = () => {
+        for (const roomId of socket.rooms) {
+            if (roomId === socket.id)
+                continue;
+            roomLeave({ roomId, socketId: socket.id, leaveRoom: false });
         }
     };
     socket.on("room:create", roomCreate);
@@ -254,5 +297,6 @@ function registerRoomHandlers(io, socket) {
     socket.on("room:rejoin", roomRejoin);
     socket.on("room:leave", roomLeave);
     socket.on("room:kick", roomKick);
+    socket.on("disconnecting", handleDisconnecting);
 }
 //# sourceMappingURL=rooms.js.map

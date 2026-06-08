@@ -177,6 +177,13 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
 
     socket.join(payload.roomId);
     player.socketId = payload.socketId;
+    // update game data with the new socketId
+    if (room.gameRule.status === "playing") {
+      const gamePlayer = room.gameData?.players.find(p => p.playerEmail === payload.playerEmail);
+      if (gamePlayer) {
+        gamePlayer.socketId = payload.socketId;
+      }
+    }
     room.updatedAt = new Date();
 
     socket.emit("room-rejoin-success", {
@@ -184,10 +191,13 @@ export default function registerRoomHandlers(io: Server, socket: Socket) {
       message: "Room rejoined successfully",
       data: {
         player: {
+          playerSocketId: player.socketId,
           playerName: player.playerName,
           playerEmail: player.playerEmail,
         },
         gameData: room.gameRule.status === "playing" ? room.gameData?.players.find(p => p.playerEmail === payload.playerEmail) : undefined,
+        gamePhase: room.gameData?.gamePhase,
+        voteResult: room.gameData?.voteResult,
       },
     });
   };

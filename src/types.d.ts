@@ -89,6 +89,8 @@ declare global {
     /** Superpower names assigned in the previous round (excluded from the current round's pool). */
     superpowerHistory: string[];
     players: PlayerWithRole[];
+    gamePhase: "start" | "vote" | "vote-result";
+    voteResult?: string;
     usePassivePowers?: {
       powerName: string;
       isActive: boolean;

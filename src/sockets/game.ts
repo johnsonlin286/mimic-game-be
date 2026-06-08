@@ -157,6 +157,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       roleHistory: updatedHistory,
       superpowerHistory: newSuperpowerHistory,
       usePassivePowers: null,
+      gamePhase: "start",
     };
     room.updatedAt = new Date();
 
@@ -192,6 +193,14 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     if (!requireHost(socket, player, "game-start-vote-failed")) return;
     if (!requireGameStatus(socket, room, "playing", "game-start-vote-failed")) return;
 
+    room.gameData = {
+      wordPairList: room.gameData?.wordPairList ?? [],
+      roleHistory: room.gameData?.roleHistory ?? [],
+      superpowerHistory: room.gameData?.superpowerHistory ?? [],
+      players: room.gameData?.players ?? [],
+      usePassivePowers: room.gameData?.usePassivePowers ?? null,
+      gamePhase: "vote",
+    };
     room.updatedAt = new Date();
     io.to(payload.roomId).emit("listen-game-start-vote", {
       success: true,
@@ -293,6 +302,8 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       superpowerHistory: room.gameData?.superpowerHistory ?? [],
       players: results.data.players,
       usePassivePowers: null,
+      gamePhase: "vote-result",
+      voteResult: results.message,
     };
 
     results.data.players.forEach(p => {
@@ -307,7 +318,17 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
 
     // Announce the round outcome. The "Blind guess the word" branch also
     // notifies the Blind privately so they can submit a guess.
-    if (results.message === "Blind guess the word") {
+    if (results.message === "Blind got caught!") {
+      room.gameData = {
+        wordPairList: room.gameData?.wordPairList ?? [],
+        roleHistory: room.gameData?.roleHistory ?? [],
+        superpowerHistory: room.gameData?.superpowerHistory ?? [],
+        players: room.gameData?.players ?? [],
+        usePassivePowers: room.gameData?.usePassivePowers ?? null,
+        gamePhase: "vote-result",
+        voteResult: "Blind got caught!",
+      };
+      room.updatedAt = new Date();
       const blindPlayer = room.gameData.players.find(p => p.gameRole === "blind");
       if (!blindPlayer) {
         io.to(payload.roomId).emit("game-calculate-results-failed", {
@@ -322,10 +343,13 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       });
     }
 
-    const message =
-      results.message === "Blind guess the word" ? "Blind got caught!" :
-      results.message === "Game continue" ? "Game continue" :
-      results.message;
+    // const message =
+    //   results.message === "Blind got caught!" ? "Blind got caught!" :
+    //   results.message === "Game continue" ? "Game continue" :
+    //   results.message === "Vote tied" ? "Vote tied" :
+    //   results.message;
+
+    const message = results.message;
 
     // Notify clients about any passive superpower effects that fired this round
     // so the UI can show an announcement before revealing the elimination result.
@@ -348,6 +372,30 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     });
   };
 
+  const gameReGuessTheWord = ({roomId, playerEmail}: {roomId: string, playerEmail: string}) => {
+    const room = findRoom(socket, roomId, "listen-game-re-guess-failed");
+    if (!room) return;
+
+    const player = findGamePlayer(socket, room, playerEmail, "listen-game-re-guess-failed");
+    if (!player) return;
+
+    // find the blind in the room
+    const blindPlayer = room.gameData?.players.find(p => p.gameRole === "blind");
+    if (!blindPlayer) {
+      socket.emit("listen-game-re-guess-failed", {
+        success: false,
+        message: "Blind player not found",
+      });
+      return;
+    }
+
+    // emit the event to the blind player
+    io.to(blindPlayer.socketId).emit("listen-game-re-guess-success", {
+      success: true,
+      message: "Blind guess the word",
+    });
+  }
+
   const gameBlindGuessTheWord = (payload: GameBlindGuessTheWordPayload) => {
     const room = findRoom(socket, payload.roomId, "game-blind-guess-the-word-failed");
     if (!room) return;
@@ -365,10 +413,21 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
 
     const targetWord = room.gameData?.wordPairList[0]?.majorityWord ?? "";
     if (targetWord.toLowerCase() === payload.guessWord.toLowerCase()) {
+      room.gameData = {
+        wordPairList: room.gameData?.wordPairList ?? [],
+        roleHistory: room.gameData?.roleHistory ?? [],
+        superpowerHistory: room.gameData?.superpowerHistory ?? [],
+        players: room.gameData?.players ?? [],
+        usePassivePowers: room.gameData?.usePassivePowers ?? null,
+        gamePhase: "vote-result",
+        voteResult: "Blind is the winner",
+      };
+      room.updatedAt = new Date();
       io.to(payload.roomId).emit("listen-game-blind-guess-the-word-correctly", {
         success: true,
         message: "Blind guessed the word correctly",
         data: {
+          outcomeMessage: "Blind is the winner",
           room: gameBroadcast(room, { includeWordPairList: true }),
         },
       });
@@ -385,6 +444,8 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       superpowerHistory: room.gameData?.superpowerHistory ?? [],
       players: updatedPlayers,
       usePassivePowers: room.gameData?.usePassivePowers ?? null,
+      gamePhase: "vote-result",
+      voteResult: "Blind got eliminated",
     };
     room.updatedAt = new Date();
 
@@ -398,12 +459,16 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       else if (p.gameRole === "blind") blindCount++;
     }
 
-    let outcomeMessage = "Game continue";
+    const oppositionCount = minorityCount + blindCount;
+    const oppositionWins =
+      majorityCount === 0
+      || majorityCount < oppositionCount
+      || (majorityCount === 1 && oppositionCount === 1);
+
+    let outcomeMessage = "Blind got eliminated";
     if (minorityCount === 0 && blindCount === 0) {
       outcomeMessage = "Majority is the winner";
-    } else if (majorityCount === 0) {
-      outcomeMessage = blindCount > 0 ? "Blind is the winner" : "Minority is the winner";
-    } else if (majorityCount <= minorityCount + blindCount) {
+    } else if (oppositionWins) {
       outcomeMessage = minorityCount > 0 ? "Minority is the winner" : "Blind is the winner";
     }
 
@@ -412,7 +477,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
       message: "The blind guessed the word incorrectly",
       data: {
         outcomeMessage,
-        room: gameBroadcast(room, { includeWordPairList: true }),
+        room: gameBroadcast(room, { includeWordPairList: false }),
       },
     });
   };
@@ -427,6 +492,14 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     if (!requireGameStatus(socket, room, "playing", "game-continue-failed")) return;
 
     if (room.gameData) clearVotes(room.gameData.players);
+    room.gameData = {
+      wordPairList: room.gameData?.wordPairList ?? [],
+      roleHistory: room.gameData?.roleHistory ?? [],
+      superpowerHistory: room.gameData?.superpowerHistory ?? [],
+      players: room.gameData?.players ?? [],
+      usePassivePowers: room.gameData?.usePassivePowers ?? null,
+      gamePhase: "start",
+    };
     room.updatedAt = new Date();
 
     io.to(payload.roomId).emit("listen-game-continue-success", {
@@ -443,7 +516,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
     if (!room) return;
 
     room.gameRule.status = "ready";
-    room.gameData = { wordPairList: [], roleHistory: [], superpowerHistory: [], players: [], usePassivePowers: null };
+    room.gameData = { wordPairList: [], roleHistory: [], superpowerHistory: [], players: [], usePassivePowers: null, gamePhase: "start" };
     room.updatedAt = new Date();
 
     io.to(payload.roomId).emit("listen-game-restart-success", {
@@ -472,6 +545,7 @@ export default function registerGameHandlers(io: Server, socket: Socket) {
   socket.on("game:vote-response", gameVoteResponse);
   socket.on("game:calculate-results", gameCalculateVote);
   socket.on("game:blind-guess-the-word", gameBlindGuessTheWord);
+  socket.on("game:re-guess-the-word", gameReGuessTheWord);
   socket.on("game:continue", gameContinue);
   socket.on("game:restart", gameRestart);
   socket.on("game:hide-overlay", hideOverlay);

@@ -1,35 +1,124 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.calculateRoles = calculateRoles;
-exports.fisherYatesShuffle = fisherYatesShuffle;
+exports.calculateSuperpowers = calculateSuperpowers;
+exports.assignRolesWithRotation = assignRolesWithRotation;
+exports.roleFisherYatesShuffle = roleFisherYatesShuffle;
+exports.maskWordWithHint = maskWordWithHint;
 function calculateRoles(playerCount, isVoidEnabled) {
-    let numMimics = 1;
-    let numVoids = 0;
+    let numMinorities = 1;
+    let numBlinds = 0;
     // 1. Calculate Mimics based on your rules
     if (playerCount >= 9) {
-        numMimics = 3;
+        numMinorities = 3;
     }
     else if (playerCount >= 7) {
-        numMimics = 2;
+        numMinorities = 2;
     }
     // 2. Calculate Voids if the host enabled them
     if (isVoidEnabled) {
         if (playerCount >= 10) {
-            numVoids = 2;
+            numBlinds = 2;
         }
         else if (playerCount >= 5) {
-            numVoids = 1;
+            numBlinds = 1;
         }
     }
     // 3. The rest are Originals
-    const numOriginals = playerCount - numMimics - numVoids;
-    return { numMimics, numVoids, numOriginals };
+    const numMajorities = playerCount - numMinorities - numBlinds;
+    return { numMinorities, numBlinds, numMajorities };
 }
-function fisherYatesShuffle(array) {
+/** How many distinct active / passive superpowers are in play this round. Always returns numbers (zeros when disabled or lobby too small). */
+function calculateSuperpowers(playerCount, superpowersEnabled) {
+    if (!superpowersEnabled) {
+        return { numActivePowers: 0, numPassivePowers: 0 };
+    }
+    if (playerCount >= 7) {
+        return { numActivePowers: 2, numPassivePowers: 1 };
+    }
+    if (playerCount >= 3) { // 5 is the minimum number of players for superpowers
+        return { numActivePowers: 1, numPassivePowers: 1 };
+    }
+    return { numActivePowers: 0, numPassivePowers: 0 };
+}
+function roleFisherYatesShuffle(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [array[i], array[j]] = [array[j], array[i]];
     }
     return array;
+}
+/**
+ * Assigns minority/blind roles with rotation so the same player(s) are not
+ * repeatedly chosen. Mirrors the word-pair exhaustion pattern:
+ *
+ *  - Players who have NOT received a special role since the last reset are
+ *    "fresh" and are always drawn first.
+ *  - Once every player has been a special-role recipient (pool exhausted),
+ *    the history resets and a new cycle begins.
+ *
+ * Returns:
+ *  - `roleMap`       – email → GameRole for every player in `players`.
+ *  - `updatedHistory`– new `roleHistory` value to persist in GameData.
+ */
+function assignRolesWithRotation(players, numMinorities, numBlinds, previousSpecialRoleEmails) {
+    const numSpecial = numMinorities + numBlinds;
+    const prevSet = new Set(previousSpecialRoleEmails);
+    const fresh = [];
+    const used = [];
+    for (const p of players) {
+        (prevSet.has(p.playerEmail) ? used : fresh).push(p);
+    }
+    roleFisherYatesShuffle(fresh);
+    roleFisherYatesShuffle(used);
+    // Draw special-role candidates from fresh first; fall back to used when exhausted.
+    const exhausted = fresh.length < numSpecial;
+    const specialPool = exhausted
+        ? [...fresh, ...used].slice(0, numSpecial)
+        : fresh.slice(0, numSpecial);
+    // Shuffle within the pool so minority vs blind assignment is random.
+    roleFisherYatesShuffle(specialPool);
+    const specialEmails = new Set(specialPool.map(p => p.playerEmail));
+    const roleMap = new Map();
+    specialPool.slice(0, numMinorities).forEach(p => roleMap.set(p.playerEmail, "minority"));
+    specialPool.slice(numMinorities).forEach(p => roleMap.set(p.playerEmail, "blind"));
+    players
+        .filter(p => !specialEmails.has(p.playerEmail))
+        .forEach(p => roleMap.set(p.playerEmail, "majority"));
+    // On exhaustion start a new cycle; otherwise keep accumulating.
+    const updatedHistory = exhausted
+        ? specialPool.map(p => p.playerEmail)
+        : [...previousSpecialRoleEmails, ...specialPool.map(p => p.playerEmail)];
+    return { roleMap, updatedHistory };
+}
+/**
+ * Returns a masked version of a word where all characters are hidden as "_"
+ * except one randomly revealed letter (spaces are always kept visible).
+ *
+ * e.g. "HOSPITAL" → "_ _ S _ _ _ _ _"
+ *      "Ice Cream" → "_ _ e   C _ _ _ _"
+ *      null / ""   → "NO SIGNAL"
+ */
+function maskWordWithHint(word) {
+    if (!word)
+        return "NO SIGNAL";
+    const chars = [...word];
+    // Collect indices of actual letters (skip spaces).
+    const letterIndices = chars.reduce((acc, ch, i) => {
+        if (ch !== " ")
+            acc.push(i);
+        return acc;
+    }, []);
+    if (letterIndices.length === 0)
+        return word;
+    // Pick one letter index to reveal.
+    const revealIdx = letterIndices[Math.floor(Math.random() * letterIndices.length)];
+    return chars
+        .map((ch, i) => {
+        if (ch === " ")
+            return " ";
+        return i === revealIdx ? ch : "_";
+    })
+        .join(" ");
 }
 //# sourceMappingURL=algorithmScript.js.map

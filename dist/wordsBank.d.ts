@@ -3,40 +3,40 @@ declare const returnWordsBank: (lang: string) => {
         id: string;
         label: string;
         words: {
-            original: string;
-            mimic: string;
+            primary: string;
+            secondary: string;
         }[];
     };
     animals: {
         id: string;
         label: string;
         words: {
-            original: string;
-            mimic: string;
+            primary: string;
+            secondary: string;
         }[];
     };
     movies: {
         id: string;
         label: string;
         words: {
-            original: string;
-            mimic: string;
+            primary: string;
+            secondary: string;
         }[];
     };
     places: {
         id: string;
         label: string;
         words: {
-            original: string;
-            mimic: string;
+            primary: string;
+            secondary: string;
         }[];
     };
     technology: {
         id: string;
         label: string;
         words: {
-            original: string;
-            mimic: string;
+            primary: string;
+            secondary: string;
         }[];
     };
 };

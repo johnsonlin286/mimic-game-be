@@ -183,7 +183,7 @@ export default function calculateVoteResults(
   if (isTie || topEmail == null || topRole == null) {
     return {
       success: true,
-      message: "Vote tied - no elimination",
+      message: "Vote tied",
       data: { players: playersWithPowerUpdates },
       triggeredEffects,
     };
@@ -218,7 +218,8 @@ export default function calculateVoteResults(
   //                (Must precede "Majority wins" so the guess isn't skipped even
   //                when all minorities are already dead.)
   // 3. Majority  — wins when every opposition player has been eliminated.
-  // 4. Opposition — wins on parity: opposition count >= majority count.
+  // 4. Opposition win — when all majorities are dead, opposition outnumbers
+  //    majority, or only one majority faces one opposition player (1v1).
   // 5. Continue  — none of the above; next round begins.
 
   const eliminated = players.find(p => p.isAlive && p.playerEmail === topEmail);
@@ -249,7 +250,7 @@ export default function calculateVoteResults(
   if (topRole === "blind") {
     return {
       success: true,
-      message: "Blind guess the word",
+      message: "Blind got caught!",
       data: { players: newPlayers },
       triggeredEffects,
     };
@@ -264,17 +265,30 @@ export default function calculateVoteResults(
     };
   }
 
-  if (majorityCount <= minorityCount + blindCount) {
+  const oppositionCount = minorityCount + blindCount;
+  const oppositionWins =
+    majorityCount === 0
+    || majorityCount < oppositionCount
+    || (majorityCount === 1 && oppositionCount === 1);
+
+  if (oppositionWins) {
     const oppositionMessage =
-      minorityCount > 0 && blindCount > 0
-        ? "Minority and Blind are the winners"
-        : blindCount > 0
-          ? "Blind is the winner"
-          : "Minority is the winner";
+      minorityCount > 0
+        ? "Minority is the winner"
+        : "Blind is the winner";
 
     return {
       success: true,
       message: oppositionMessage,
+      data: { players: newPlayers },
+      triggeredEffects,
+    };
+  }
+
+  if (topRole === "minority") {
+    return {
+      success: true,
+      message: "Minority got eliminated",
       data: { players: newPlayers },
       triggeredEffects,
     };

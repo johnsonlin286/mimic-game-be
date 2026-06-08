@@ -6,15 +6,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = registerGameHandlers;
 const algorithmScript_1 = require("../algorithmScript");
 const wordsBank_1 = require("../wordsBank");
+const superpowers_1 = require("../superpowers");
 const voteScript_1 = __importDefault(require("../voteScript"));
 const serializers_1 = require("./serializers");
 const guards_1 = require("./guards");
 /** Returns the word a player should see for the chosen role. */
 function wordForRole(role, pair) {
-    if (role === "mimic")
-        return pair.mimicWord;
-    if (role === "original")
-        return pair.originalWord;
+    if (role === "minority")
+        return pair.minorityWord;
+    if (role === "majority")
+        return pair.majorityWord;
     return null;
 }
 /**
@@ -92,35 +93,41 @@ function registerGameHandlers(io, socket) {
             if (!(0, guards_1.requireHost)(socket, player, "game-initialize-failed"))
                 return;
         }
-        const { numMimics, numVoids, numOriginals } = (0, algorithmScript_1.calculateRoles)(room.roomPlayers.length, room.gameRule.roles.void);
-        const roleDeck = [
-            ...Array(numMimics).fill("mimic"),
-            ...Array(numVoids).fill("void"),
-            ...Array(numOriginals).fill("original"),
-        ];
-        const shuffledRoleDeck = (0, algorithmScript_1.fisherYatesShuffle)(roleDeck);
+        const { numMinorities, numBlinds } = (0, algorithmScript_1.calculateRoles)(room.roomPlayers.length, room.gameRule.roles.blind);
         const previousPairs = room.gameData?.wordPairList ?? [];
+        const previousRoleHistory = room.gameData?.roleHistory ?? [];
         const newWordPair = (0, wordsBank_1.randomWordPair)(room.gameRule.language, room.gameRule.category, previousPairs);
-        const playersWithRoles = room.roomPlayers.map((p, i) => {
-            const role = shuffledRoleDeck[i] ?? "original";
+        const { roleMap, updatedHistory } = (0, algorithmScript_1.assignRolesWithRotation)(room.roomPlayers, numMinorities, numBlinds, previousRoleHistory);
+        const playersWithRoles = room.roomPlayers.map(p => {
+            const role = roleMap.get(p.playerEmail) ?? "majority";
             return {
                 socketId: p.socketId,
                 playerName: p.playerName,
                 playerEmail: p.playerEmail,
                 gameRole: role,
                 gameWord: wordForRole(role, newWordPair),
+                superpower: null,
+                hasUsedSuperpower: false,
                 hasVoted: false,
                 voters: [],
                 isAlive: true,
             };
         });
-        // When the category is exhausted we restart with just the latest pair
-        // instead of accumulating duplicates indefinitely.
+        const { numActivePowers, numPassivePowers } = (0, algorithmScript_1.calculateSuperpowers)(room.roomPlayers.length, room.gameRule.superpowers);
+        const previousSuperpowerHistory = room.gameData?.superpowerHistory ?? [];
+        const newSuperpowerHistory = (0, superpowers_1.assignSuperpowersForRound)(playersWithRoles, numActivePowers, numPassivePowers, previousSuperpowerHistory);
+        // When the word category is exhausted we restart from the full pool.
+        // roleHistory resets independently (via updatedHistory) when all players
+        // have cycled through a special role.
         room.gameData = {
             players: playersWithRoles,
             wordPairList: newWordPair.hasNoMoreWords
                 ? [newWordPair]
                 : [newWordPair, ...previousPairs],
+            roleHistory: updatedHistory,
+            superpowerHistory: newSuperpowerHistory,
+            usePassivePowers: null,
+            gamePhase: "start",
         };
         room.updatedAt = new Date();
         io.to(payload.roomId).emit("listen-game-initialize-success", {
@@ -139,6 +146,7 @@ function registerGameHandlers(io, socket) {
                 data: {
                     gameRole: gamePlayer?.gameRole ?? null,
                     gameWord: gamePlayer?.gameWord ?? null,
+                    superpower: gamePlayer?.superpower ?? null,
                 },
             });
         }
@@ -154,6 +162,14 @@ function registerGameHandlers(io, socket) {
             return;
         if (!(0, guards_1.requireGameStatus)(socket, room, "playing", "game-start-vote-failed"))
             return;
+        room.gameData = {
+            wordPairList: room.gameData?.wordPairList ?? [],
+            roleHistory: room.gameData?.roleHistory ?? [],
+            superpowerHistory: room.gameData?.superpowerHistory ?? [],
+            players: room.gameData?.players ?? [],
+            usePassivePowers: room.gameData?.usePassivePowers ?? null,
+            gamePhase: "vote",
+        };
         room.updatedAt = new Date();
         io.to(payload.roomId).emit("listen-game-start-vote", {
             success: true,
@@ -227,7 +243,7 @@ function registerGameHandlers(io, socket) {
             return;
         if (!(0, guards_1.requireHost)(socket, player, "game-calculate-results-failed"))
             return;
-        const results = (0, voteScript_1.default)(room.gameData?.players ?? []);
+        const results = (0, voteScript_1.default)(room.gameData?.players ?? [], room.gameData?.usePassivePowers ?? null);
         room.updatedAt = new Date();
         if (!results.success) {
             socket.emit("game-calculate-results-failed", {
@@ -238,52 +254,127 @@ function registerGameHandlers(io, socket) {
         }
         room.gameData = {
             wordPairList: room.gameData?.wordPairList ?? [],
+            roleHistory: room.gameData?.roleHistory ?? [],
+            superpowerHistory: room.gameData?.superpowerHistory ?? [],
             players: results.data.players,
+            usePassivePowers: null,
+            gamePhase: "vote-result",
+            voteResult: results.message,
         };
-        // Announce the round outcome. The "Void guess the word" branch also
-        // notifies the void privately so they can submit a guess.
-        if (results.message === "Void guess the word") {
-            const voidPlayer = room.gameData.players.find(p => p.gameRole === "void");
-            if (!voidPlayer) {
+        results.data.players.forEach(p => {
+            io.to(p.socketId).emit("listen-game-calculate-results-player", {
+                success: true,
+                message: "Game calculate results player",
+                data: {
+                    room: (0, serializers_1.gameBroadcast)(room),
+                },
+            });
+        });
+        // Announce the round outcome. The "Blind guess the word" branch also
+        // notifies the Blind privately so they can submit a guess.
+        if (results.message === "Blind got caught!") {
+            room.gameData = {
+                wordPairList: room.gameData?.wordPairList ?? [],
+                roleHistory: room.gameData?.roleHistory ?? [],
+                superpowerHistory: room.gameData?.superpowerHistory ?? [],
+                players: room.gameData?.players ?? [],
+                usePassivePowers: room.gameData?.usePassivePowers ?? null,
+                gamePhase: "vote-result",
+                voteResult: "Blind got caught!",
+            };
+            room.updatedAt = new Date();
+            const blindPlayer = room.gameData.players.find(p => p.gameRole === "blind");
+            if (!blindPlayer) {
                 io.to(payload.roomId).emit("game-calculate-results-failed", {
                     success: false,
-                    message: "Void player not found",
+                    message: "Blind player not found",
                 });
                 return;
             }
-            io.to(voidPlayer.socketId).emit("listen-game-void-got-caught", {
+            io.to(blindPlayer.socketId).emit("listen-game-blind-got-caught", {
                 success: true,
-                message: "Void guessed the word",
+                message: "Blind guessed the word",
             });
         }
-        const message = results.message === "Void guess the word" ? "Void got caught!" :
-            results.message === "Game continue" ? "Game continue" :
-                results.message;
+        // const message =
+        //   results.message === "Blind got caught!" ? "Blind got caught!" :
+        //   results.message === "Game continue" ? "Game continue" :
+        //   results.message === "Vote tied" ? "Vote tied" :
+        //   results.message;
+        const message = results.message;
+        // Notify clients about any passive superpower effects that fired this round
+        // so the UI can show an announcement before revealing the elimination result.
+        if (results.triggeredEffects.length > 0) {
+            io.to(payload.roomId).emit("listen-game-superpower-triggered", {
+                success: true,
+                message: "Passive superpower triggered",
+                data: { triggeredEffects: results.triggeredEffects },
+            });
+        }
+        // When someone has won we expose the full word history so the client can
+        // show what every round's pair was. Mid-game broadcasts stay sanitized.
+        const isWinner = message.endsWith("is the winner");
         io.to(payload.roomId).emit("listen-game-calculate-results", {
             success: true,
             message,
-            data: (0, serializers_1.gameBroadcast)(room),
+            data: (0, serializers_1.gameBroadcast)(room, { includeWordPairList: isWinner }),
         });
     };
-    const gameVoidGuessTheWord = (payload) => {
-        const room = (0, guards_1.findRoom)(socket, payload.roomId, "game-void-guess-the-word-failed");
+    const gameReGuessTheWord = ({ roomId, playerEmail }) => {
+        const room = (0, guards_1.findRoom)(socket, roomId, "listen-game-re-guess-failed");
         if (!room)
             return;
-        const player = (0, guards_1.findGamePlayer)(socket, room, payload.playerEmail, "game-void-guess-the-word-failed");
+        const player = (0, guards_1.findGamePlayer)(socket, room, playerEmail, "listen-game-re-guess-failed");
         if (!player)
             return;
-        if (player.gameRole !== "void") {
-            socket.emit("game-void-guess-the-word-failed", {
+        // find the blind in the room
+        const blindPlayer = room.gameData?.players.find(p => p.gameRole === "blind");
+        if (!blindPlayer) {
+            socket.emit("listen-game-re-guess-failed", {
                 success: false,
-                message: "Player is not the void",
+                message: "Blind player not found",
             });
             return;
         }
-        const targetWord = room.gameData?.wordPairList[0]?.originalWord ?? "";
+        // emit the event to the blind player
+        io.to(blindPlayer.socketId).emit("listen-game-re-guess-success", {
+            success: true,
+            message: "Blind guess the word",
+        });
+    };
+    const gameBlindGuessTheWord = (payload) => {
+        const room = (0, guards_1.findRoom)(socket, payload.roomId, "game-blind-guess-the-word-failed");
+        if (!room)
+            return;
+        const player = (0, guards_1.findGamePlayer)(socket, room, payload.playerEmail, "game-blind-guess-the-word-failed");
+        if (!player)
+            return;
+        if (player.gameRole !== "blind") {
+            socket.emit("game-blind-guess-the-word-failed", {
+                success: false,
+                message: "Player is not the blind",
+            });
+            return;
+        }
+        const targetWord = room.gameData?.wordPairList[0]?.majorityWord ?? "";
         if (targetWord.toLowerCase() === payload.guessWord.toLowerCase()) {
-            io.to(payload.roomId).emit("listen-game-void-guess-the-word-correctly", {
+            room.gameData = {
+                wordPairList: room.gameData?.wordPairList ?? [],
+                roleHistory: room.gameData?.roleHistory ?? [],
+                superpowerHistory: room.gameData?.superpowerHistory ?? [],
+                players: room.gameData?.players ?? [],
+                usePassivePowers: room.gameData?.usePassivePowers ?? null,
+                gamePhase: "vote-result",
+                voteResult: "Blind is the winner",
+            };
+            room.updatedAt = new Date();
+            io.to(payload.roomId).emit("listen-game-blind-guess-the-word-correctly", {
                 success: true,
-                message: "Void guessed the word correctly",
+                message: "Blind guessed the word correctly",
+                data: {
+                    outcomeMessage: "Blind is the winner",
+                    room: (0, serializers_1.gameBroadcast)(room, { includeWordPairList: true }),
+                },
             });
             return;
         }
@@ -291,38 +382,44 @@ function registerGameHandlers(io, socket) {
         const updatedPlayers = (room.gameData?.players ?? []).map(p => p.playerEmail === payload.playerEmail ? { ...p, isAlive: false } : p);
         room.gameData = {
             wordPairList: room.gameData?.wordPairList ?? [],
+            roleHistory: room.gameData?.roleHistory ?? [],
+            superpowerHistory: room.gameData?.superpowerHistory ?? [],
             players: updatedPlayers,
+            usePassivePowers: room.gameData?.usePassivePowers ?? null,
+            gamePhase: "vote-result",
+            voteResult: "Blind got eliminated",
         };
         room.updatedAt = new Date();
-        let originalCount = 0;
-        let mimicCount = 0;
-        let voidCount = 0;
+        let majorityCount = 0;
+        let minorityCount = 0;
+        let blindCount = 0;
         for (const p of updatedPlayers) {
             if (!p.isAlive)
                 continue;
-            if (p.gameRole === "original")
-                originalCount++;
-            else if (p.gameRole === "mimic")
-                mimicCount++;
-            else if (p.gameRole === "void")
-                voidCount++;
+            if (p.gameRole === "majority")
+                majorityCount++;
+            else if (p.gameRole === "minority")
+                minorityCount++;
+            else if (p.gameRole === "blind")
+                blindCount++;
         }
-        let outcomeMessage = "Game continue";
-        if (mimicCount === 0 && voidCount === 0) {
-            outcomeMessage = "Original is the winner";
+        const oppositionCount = minorityCount + blindCount;
+        const oppositionWins = majorityCount === 0
+            || majorityCount < oppositionCount
+            || (majorityCount === 1 && oppositionCount === 1);
+        let outcomeMessage = "Blind got eliminated";
+        if (minorityCount === 0 && blindCount === 0) {
+            outcomeMessage = "Majority is the winner";
         }
-        else if (originalCount === 0) {
-            outcomeMessage = voidCount > 0 ? "Void is the winner" : "Mimic is the winner";
+        else if (oppositionWins) {
+            outcomeMessage = minorityCount > 0 ? "Minority is the winner" : "Blind is the winner";
         }
-        else if (originalCount <= mimicCount + voidCount) {
-            outcomeMessage = mimicCount > 0 ? "Mimic is the winner" : "Void is the winner";
-        }
-        io.to(payload.roomId).emit("listen-game-void-guess-the-word-incorrectly", {
+        io.to(payload.roomId).emit("listen-game-blind-guess-the-word-incorrectly", {
             success: true,
-            message: "Void guessed the word incorrectly",
+            message: "The blind guessed the word incorrectly",
             data: {
                 outcomeMessage,
-                room: (0, serializers_1.gameBroadcast)(room),
+                room: (0, serializers_1.gameBroadcast)(room, { includeWordPairList: false }),
             },
         });
     };
@@ -339,20 +436,21 @@ function registerGameHandlers(io, socket) {
             return;
         if (room.gameData)
             clearVotes(room.gameData.players);
+        room.gameData = {
+            wordPairList: room.gameData?.wordPairList ?? [],
+            roleHistory: room.gameData?.roleHistory ?? [],
+            superpowerHistory: room.gameData?.superpowerHistory ?? [],
+            players: room.gameData?.players ?? [],
+            usePassivePowers: room.gameData?.usePassivePowers ?? null,
+            gamePhase: "start",
+        };
         room.updatedAt = new Date();
         io.to(payload.roomId).emit("listen-game-continue-success", {
             success: true,
             message: "Game continued successfully",
             data: {
-                ...room,
-                gameData: {
-                    players: (room.gameData?.players ?? []).map(p => ({
-                        ...p,
-                        gameRole: null,
-                        gameWord: null,
-                    })),
-                },
-            },
+                room: (0, serializers_1.gameBroadcast)(room),
+            }
         });
     };
     const gameRestart = (payload) => {
@@ -360,7 +458,7 @@ function registerGameHandlers(io, socket) {
         if (!room)
             return;
         room.gameRule.status = "ready";
-        room.gameData = { wordPairList: [], players: [] };
+        room.gameData = { wordPairList: [], roleHistory: [], superpowerHistory: [], players: [], usePassivePowers: null, gamePhase: "start" };
         room.updatedAt = new Date();
         io.to(payload.roomId).emit("listen-game-restart-success", {
             success: true,
@@ -371,14 +469,23 @@ function registerGameHandlers(io, socket) {
             },
         });
     };
+    const hideOverlay = (roomId) => {
+        const room = (0, guards_1.findRoom)(socket, roomId, "hide-overlay-failed");
+        if (!room)
+            return;
+        room.updatedAt = new Date();
+        io.to(roomId).emit("listen-hide-overlay-success", { success: true });
+    };
     socket.on("game:update-rule", gameRuleUpdate);
     socket.on("game:start", gameStart);
     socket.on("game:initialize", gameInitialize);
     socket.on("game:start-vote", gameStartVote);
     socket.on("game:vote-response", gameVoteResponse);
     socket.on("game:calculate-results", gameCalculateVote);
-    socket.on("game:void-guess-the-word", gameVoidGuessTheWord);
+    socket.on("game:blind-guess-the-word", gameBlindGuessTheWord);
+    socket.on("game:re-guess-the-word", gameReGuessTheWord);
     socket.on("game:continue", gameContinue);
     socket.on("game:restart", gameRestart);
+    socket.on("game:hide-overlay", hideOverlay);
 }
 //# sourceMappingURL=game.js.map
